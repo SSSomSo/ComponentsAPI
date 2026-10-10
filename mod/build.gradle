@@ -1,0 +1,49 @@
+plugins {
+    id 'fabric-loom' version '1.18.4'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    implementation files("${System.getProperty('user.home')}/buildtools/client262.jar")
+    implementation files(configurations.minecraftRuntimeLibraries)
+
+    implementation files("${System.getProperty('user.home')}/buildtools/fapiextract/META-INF/jars/fabric-model-loading-api-v1-8.0.17+c80601bb9e.jar")
+    implementation files("${System.getProperty('user.home')}/buildtools/fapiextract/META-INF/jars/fabric-networking-api-v1-6.3.4+2989c6a09e.jar")
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.archivesBaseName}" }
+    }
+}
