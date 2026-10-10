@@ -1,0 +1,6 @@
+# ComponentsAPI 配置
+sync-interval-ticks: 20
+resource-pack:
+  enabled: true
+  port: 8732
+  require-download: false
