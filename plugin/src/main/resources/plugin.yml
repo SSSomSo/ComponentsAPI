@@ -1,0 +1,20 @@
+name: ComponentsAPI
+version: '${project.version}'
+main: com.componentsapi.ComponentsApiPlugin
+api-version: '26.2'
+description: 方块与生物的自定义数据组件 API（需客户端 ComponentsAPI 模组）
+author: Mc_SomSo
+
+# 没有 SSCustomItems 不允许启动
+depend:
+  - SSCustomItems
+
+commands:
+  capi:
+    description: ComponentsAPI 管理指令
+    usage: /capi block|entity ...
+
+permissions:
+  componentsapi.admin:
+    description: 允许使用 /capi 修改组件
+    default: op

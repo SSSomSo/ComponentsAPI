@@ -1,0 +1,11 @@
+target/
+*.jar
+!**/gradle-wrapper.jar
+.gradle/
+build/
+.idea/
+*.iml
+.vscode/
+run/
+logs/
+*.log

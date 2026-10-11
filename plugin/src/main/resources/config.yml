@@ -1,0 +1,13 @@
+# ComponentsAPI 配置
+
+# 同步给客户端模组的扫描/推送间隔（刻）
+sync-interval-ticks: 20
+
+# 内置资源包自动加载
+resource-pack:
+  # 启动时自动向玩家推送 jar 内置资源包
+  enabled: true
+  # 内置 HTTP 服务端口（向客户端提供下载）
+  port: 8732
+  # 是否必须从服务端下载资源包：true 时拒绝/下载失败会被踢出；false 时仅提示
+  require-download: false

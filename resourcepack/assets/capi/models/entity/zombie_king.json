@@ -1,0 +1,41 @@
+{
+  "texture_size": [32, 32],
+  "textures": {
+    "0": "capi:entity/zombie_king"
+  },
+  "display": {
+    "head": {
+      "rotation": [0, 180, 0],
+      "translation": [0, -8, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "elements": [
+    {
+      "name": "body",
+      "from": [4, 0, 4],
+      "to": [28, 24, 28],
+      "faces": {
+        "north": { "texture": "#0" },
+        "east": { "texture": "#0" },
+        "south": { "texture": "#0" },
+        "west": { "texture": "#0" },
+        "up": { "texture": "#0" },
+        "down": { "texture": "#0" }
+      }
+    },
+    {
+      "name": "head",
+      "from": [6, 24, 6],
+      "to": [26, 44, 26],
+      "faces": {
+        "north": { "texture": "#0" },
+        "east": { "texture": "#0" },
+        "south": { "texture": "#0" },
+        "west": { "texture": "#0" },
+        "up": { "texture": "#0" },
+        "down": { "texture": "#0" }
+      }
+    }
+  ]
+}

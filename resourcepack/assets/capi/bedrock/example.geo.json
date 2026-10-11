@@ -1,0 +1,93 @@
+{
+  "format_version": "1.16.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.example",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 2,
+        "visible_bounds_height": 2,
+        "visible_bounds_offset": [0, 1, 0]
+      },
+      "bones": [
+        {
+          "name": "root",
+          "pivot": [0, 24, 0],
+          "cubes": [
+            {
+              "origin": [-4, 12, -2],
+              "size": [8, 12, 4],
+              "uv": [16, 16]
+            },
+            {
+              "origin": [-4, 24, -4],
+              "size": [8, 8, 8],
+              "uv": [0, 0]
+            }
+          ]
+        },
+        {
+          "name": "armR",
+          "parent": "root",
+          "pivot": [-4, 24, 0],
+          "cubes": [
+            {
+              "origin": [-8, 12, -2],
+              "size": [4, 12, 4],
+              "uv": [40, 32]
+            }
+          ]
+        },
+        {
+          "name": "armL",
+          "parent": "root",
+          "pivot": [4, 24, 0],
+          "cubes": [
+            {
+              "origin": [4, 12, -2],
+              "size": [4, 12, 4],
+              "uv": [40, 16]
+            }
+          ]
+        },
+        {
+          "name": "legR",
+          "parent": "root",
+          "pivot": [-2, 12, 0],
+          "cubes": [
+            {
+              "origin": [-4, 0, -2],
+              "size": [4, 12, 4],
+              "uv": [0, 16]
+            }
+          ]
+        },
+        {
+          "name": "legL",
+          "parent": "root",
+          "pivot": [2, 12, 0],
+          "cubes": [
+            {
+              "origin": [0, 0, -2],
+              "size": [4, 12, 4],
+              "uv": [16, 48]
+            }
+          ]
+        },
+        {
+          "name": "handR",
+          "parent": "armR",
+          "pivot": [-6, 12, 0],
+          "capi:hand": "right"
+        },
+        {
+          "name": "handL",
+          "parent": "armL",
+          "pivot": [6, 12, 0],
+          "capi:hand": "left"
+        }
+      ]
+    }
+  ]
+}

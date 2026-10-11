@@ -1,0 +1,54 @@
+plugins {
+    id 'fabric-loom' version '1.18.4'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    // Loom 自动添加 Fabric / Mojang 仓库
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 无 client_mappings），无需 mappings。
+
+    // 无重映射模式：mod* 配置不创建，直接用 implementation
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // 无重映射模式：直接使用 Mojang 官方命名客户端 jar（Loom 已下载到本机缓存目录）
+    implementation files("${System.getProperty('user.home')}/buildtools/client262.jar")
+    implementation files(configurations.minecraftRuntimeLibraries)
+
+    // fabric-api 为 JiJ 包装 jar，无重映射模式不自动拆分；编译期直接引用所需模块
+    implementation files("${System.getProperty('user.home')}/buildtools/fapiextract/META-INF/jars/fabric-model-loading-api-v1-8.0.17+c80601bb9e.jar")
+    implementation files("${System.getProperty('user.home')}/buildtools/fapiextract/META-INF/jars/fabric-networking-api-v1-6.3.4+2989c6a09e.jar")
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.archivesBaseName}" }
+    }
+}
