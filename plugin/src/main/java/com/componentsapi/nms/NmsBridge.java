@@ -21,6 +21,7 @@ public final class NmsBridge {
     private final Constructor<?> compoundCtor;
     private final Method getBlockEntity;
     private final Method saveFull;
+    private final boolean saveFullHasParam;
     private final Method loadWithComponents;
     private final Method load;
     private final Method registryAccess;
@@ -61,7 +62,24 @@ public final class NmsBridge {
             tagGet = compound.getMethod("get", String.class);
 
             Class<?> blockEntity = Class.forName("net.minecraft.world.level.block.entity.BlockEntity");
-            saveFull = blockEntity.getMethod("saveWithFullMetadata", compound);
+            // 保存方法在不同版本/分支签名不同：
+            //   Paper 部分版本: saveWithFullMetadata(CompoundTag)
+            //   Leaf/较新原版: saveWithFullMetadata() 无参返回 CompoundTag
+            //   旧版: save(CompoundTag)
+            // 按优先级尝试，取第一个存在的。
+            Method sf = findMethod(blockEntity, "saveWithFullMetadata", compound);
+            if (sf == null) {
+                sf = findMethod(blockEntity, "saveWithFullMetadata");
+            }
+            if (sf == null) {
+                sf = findMethod(blockEntity, "save", compound);
+            }
+            if (sf == null) {
+                throw new NoSuchMethodException(
+                        "BlockEntity 中找不到 saveWithFullMetadata()/saveWithFullMetadata(CompoundTag)/save(CompoundTag)");
+            }
+            saveFull = sf;
+            saveFullHasParam = sf.getParameterCount() > 0;
 
             Class<?> level = Class.forName("net.minecraft.world.level.Level");
             getBlockEntity = level.getMethod("getBlockEntity", blockPos);
@@ -137,7 +155,9 @@ public final class NmsBridge {
             if (blockEntity == null) {
                 return result;
             }
-            Object fullTag = saveFull.invoke(blockEntity, compoundCtor.newInstance());
+            Object fullTag = saveFullHasParam
+                    ? saveFull.invoke(blockEntity, compoundCtor.newInstance())
+                    : saveFull.invoke(blockEntity);
             if (!(Boolean) tagContains.invoke(fullTag, "capi")) {
                 return result;
             }
@@ -161,7 +181,9 @@ public final class NmsBridge {
             if (blockEntity == null) {
                 throw new IllegalStateException("该方块不是方块实体，无法存储组件");
             }
-            Object fullTag = saveFull.invoke(blockEntity, compoundCtor.newInstance());
+            Object fullTag = saveFullHasParam
+                    ? saveFull.invoke(blockEntity, compoundCtor.newInstance())
+                    : saveFull.invoke(blockEntity);
 
             Object capi = compoundCtor.newInstance();
             for (Map.Entry<String, String> entry : components.entrySet()) {
