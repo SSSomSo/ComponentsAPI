@@ -36,11 +36,19 @@ public final class BedrockAnimation {
         public float pitchMax;
     }
 
+    /** 粒子关键帧（动画顶层 "particle_effects"）。locator 为骨骼名时在骨骼位置生成。 */
+    public static final class ParticleEvent {
+        public float time;
+        public String effect;
+        public String locator; // 骨骼名，null=实体中心
+    }
+
     public String name;
     public float length;
     public boolean loop;
     public final java.util.Map<String, BoneAnimation> bones = new java.util.HashMap<>();
     public final List<SoundEvent> sounds = new ArrayList<>();
+    public final List<ParticleEvent> particles = new ArrayList<>();
 
     /** 解析 .animation.json 中全部动画。 */
     public static java.util.Map<String, BedrockAnimation> parseAll(JsonObject root) {
@@ -106,6 +114,31 @@ public final class BedrockAnimation {
                     }
                 }
                 animation.sounds.sort((a, b) -> Float.compare(a.time, b.time));
+            }
+            if (ao.has("particle_effects")) {
+                JsonObject particlesObject = ao.getAsJsonObject("particle_effects");
+                for (Map.Entry<String, JsonElement> particleEntry : particlesObject.entrySet()) {
+                    float time = Float.parseFloat(particleEntry.getKey());
+                    java.util.List<JsonObject> objects = new ArrayList<>();
+                    JsonElement valueElement = particleEntry.getValue();
+                    if (valueElement.isJsonArray()) {
+                        for (JsonElement element : valueElement.getAsJsonArray()) {
+                            objects.add(element.getAsJsonObject());
+                        }
+                    } else {
+                        objects.add(valueElement.getAsJsonObject());
+                    }
+                    for (JsonObject po : objects) {
+                        ParticleEvent particle = new ParticleEvent();
+                        particle.time = time;
+                        particle.effect = po.get("effect").getAsString();
+                        if (po.has("locator")) {
+                            particle.locator = po.get("locator").getAsString();
+                        }
+                        animation.particles.add(particle);
+                    }
+                }
+                animation.particles.sort((a, b) -> Float.compare(a.time, b.time));
             }
             result.put(animation.name, animation);
         }

@@ -4,6 +4,7 @@ import com.componentsapi.client.CapiRenderState;
 import com.componentsapi.client.ClientState;
 import com.componentsapi.client.bedrock.BedrockRenderer;
 import com.componentsapi.client.bedrock.BedrockSoundTracker;
+import com.componentsapi.client.bedrock.BedrockParticleTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
@@ -53,6 +54,8 @@ public class LivingEntityRendererMixin {
         }
 
         BedrockSoundTracker.update(entity, model,
+                state.walkAnimationSpeed > 1.0e-4f, state.ageInTicks / 20f);
+        BedrockParticleTracker.update(entity, model,
                 state.walkAnimationSpeed > 1.0e-4f, state.ageInTicks / 20f);
     }
 

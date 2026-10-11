@@ -100,9 +100,11 @@ assets/capi/textures/bedrock/<name>.png      # 贴图（盒子 UV）
 
 ### 支持范围与限制
 
-- 支持：骨骼层级、盒子（盒子 UV）、`inflate`、`mirror`、骨骼/盒子的 `pivot` 与 `rotation`、
-  position / rotation / scale 关键帧、循环；
-- **不支持**：Molang 表达式、`catmull-rom` 插值、声音 / 粒子关键帧、每面 UV（per-face UV）；
+- 支持：骨骼层级、盒子（盒子 UV / 每面 UV per-face UV）、`inflate`、`mirror`、骨骼/盒子的 `pivot` 与 `rotation`、
+  position / rotation / scale 关键帧、循环、**声音关键帧**（`sound_effects`，3D 定位音，pitch 随机）、
+  **粒子关键帧**（`particle_effects`，支持 `effect` + `locator` 骨骼定位）、
+  每面 UV 旋转（0/90/180/270）；
+- **不支持**：Molang 表达式、`catmull-rom` 插值、带参数粒子（dust 等需额外数据的粒子类型）；
 - 若实测模型朝向或旋转整体反向，属于渲染器符号问题，按源码 `BedrockRenderer` 中的说明调整
   YP 旋转符号或面顶点顺序即可。
 
