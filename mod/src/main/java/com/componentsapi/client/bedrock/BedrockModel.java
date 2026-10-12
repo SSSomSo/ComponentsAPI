@@ -46,6 +46,8 @@ public final class BedrockModel {
         public float rotX, rotY, rotZ;
         /** 0=无挂点，1=右手，2=左手。 */
         public int hand;
+        /** true=手臂定位组（lefthand_pos/righthand_pos），物品偏移到手臂末端。 */
+        public boolean handPos;
         public final List<Cube> cubes = new ArrayList<>();
     }
 
@@ -82,6 +84,7 @@ public final class BedrockModel {
                 float[] rot = vec(bo, "rotation");
                 bone.rotX = rot[0]; bone.rotY = rot[1]; bone.rotZ = rot[2];
                 bone.hand = parseHand(bo, bone.name);
+                bone.handPos = bone.name.toLowerCase().endsWith("_pos");
 
                 if (bo.has("cubes")) {
                     for (JsonElement cubeElement : bo.getAsJsonArray("cubes")) {
@@ -148,7 +151,7 @@ public final class BedrockModel {
         return model;
     }
 
-    /** 手部挂点：优先 "capi:hand" 字段，否则按骨骼名启发式。 */
+    /** 手部挂点：优先 "capi:hand" 字段，否则按骨骼名启发式。兼容原版/TaCZ/YSM/基岩定位组。 */
     private static int parseHand(JsonObject boneObject, String boneName) {
         if (boneObject.has("capi:hand")) {
             String value = boneObject.get("capi:hand").getAsString().toLowerCase();
@@ -160,12 +163,21 @@ public final class BedrockModel {
             }
         }
         String n = boneName.toLowerCase();
-        // 仅匹配明确的 hand 命名，避免把 arm 肩膀当成挂点。
+        // 明确的 hand 命名
         if (n.contains("hand")) {
             if (n.startsWith("l") || n.contains("left") || n.contains("handl") || n.contains("lhand")) {
                 return 2;
             }
             if (n.startsWith("r") || n.contains("right") || n.contains("handr") || n.contains("rhand")) {
+                return 1;
+            }
+        }
+        // TaCZ/YSM 常用 arm 命名（rightArm/leftArm/armRight/armLeft）
+        if (n.contains("arm") && !n.contains("shoulder")) {
+            if (n.startsWith("l") || n.contains("left") || n.contains("arml") || n.contains("larm")) {
+                return 2;
+            }
+            if (n.startsWith("r") || n.contains("right") || n.contains("armr") || n.contains("rarm")) {
                 return 1;
             }
         }

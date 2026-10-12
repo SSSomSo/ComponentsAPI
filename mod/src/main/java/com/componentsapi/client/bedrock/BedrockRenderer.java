@@ -138,12 +138,17 @@ public final class BedrockRenderer {
         }
 
         // 手持物品挂点：当前骨骼局部原点即挂点（手部骨骼 pivot 放在手腕）。
+        // 手臂定位组（lefthand_pos/righthand_pos）：pivot 在肩膀，偏移到手臂末端（-12 像素）。
         // 物品状态来自 CapiRenderState（所有生物统一支持，不限人形）。
         if (bone.hand != 0 && state instanceof CapiRenderState capi) {
             ItemStackRenderState handState = bone.hand == 1
                     ? capi.capi$getMain() : capi.capi$getOff();
             if (!handState.isEmpty()) {
                 matrices.pushPose();
+                if (bone.handPos) {
+                    // 定位组标准尺寸 x4 y12 z4，末端在 pivot 下方 12 像素
+                    matrices.translate(0f, -12f * UNIT, 0f);
+                }
                 matrices.mulPose(com.mojang.math.Axis.XP.rotationDegrees(-90f));
                 matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180f));
                 handState.submit(matrices, collector, state.lightCoords,

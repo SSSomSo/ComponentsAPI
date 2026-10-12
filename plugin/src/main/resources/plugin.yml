@@ -13,6 +13,10 @@ commands:
   capi:
     description: ComponentsAPI 管理指令
     usage: /capi block|entity ...
+  playbedrockanimation:
+    description: 播放第一人称基岩手臂动画
+    usage: /playbedrockanimation <player> <namespace:animations/xxx.animation.json> <动画名>
+    aliases: [pba]
 
 permissions:
   componentsapi.admin:

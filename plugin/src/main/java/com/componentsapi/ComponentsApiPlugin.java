@@ -3,6 +3,7 @@ package com.componentsapi;
 import com.componentsapi.block.BlockComponents;
 import com.componentsapi.block.FallbackBlockStore;
 import com.componentsapi.command.CapiCommand;
+import com.componentsapi.command.PlayBedrockAnimationCommand;
 import com.componentsapi.entity.EntityComponents;
 import com.componentsapi.light.LightManager;
 import com.componentsapi.net.SyncManager;
@@ -47,12 +48,17 @@ public final class ComponentsApiPlugin extends JavaPlugin {
         packServer = new PackServer(this);
 
         getServer().getMessenger().registerOutgoingPluginChannel(this, SyncManager.CHANNEL);
+        getServer().getMessenger().registerOutgoingPluginChannel(this, PlayBedrockAnimationCommand.CHANNEL);
         getServer().getPluginManager().registerEvents(syncManager, this);
         getServer().getPluginManager().registerEvents(packServer, this);
 
         CapiCommand capiCommand = new CapiCommand(this, blockComponents, entityComponents);
         getCommand("capi").setExecutor(capiCommand);
         getCommand("capi").setTabCompleter(capiCommand);
+
+        PlayBedrockAnimationCommand animCommand = new PlayBedrockAnimationCommand(this);
+        getCommand("playbedrockanimation").setExecutor(animCommand);
+        getCommand("playbedrockanimation").setTabCompleter(animCommand);
 
         int interval = getConfig().getInt("sync-interval-ticks", 20);
         getServer().getScheduler().runTaskTimer(this, () -> {

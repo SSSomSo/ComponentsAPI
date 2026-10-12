@@ -18,5 +18,6 @@ public final class BedrockReloadListener extends SimplePreparableReloadListener<
     protected void apply(Void unused, ResourceManager resourceManager,
                          ProfilerFiller profiler) {
         BedrockModelManager.get().load(resourceManager);
+        AnimationIndex.get().load(resourceManager);
     }
 }

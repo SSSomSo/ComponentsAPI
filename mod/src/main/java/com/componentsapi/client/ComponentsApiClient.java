@@ -1,7 +1,9 @@
 package com.componentsapi.client;
 
+import com.componentsapi.client.bedrock.AnimationState;
 import com.componentsapi.client.bedrock.BedrockReloadListener;
 import com.componentsapi.client.block.BlockModelRegistry;
+import com.componentsapi.client.payload.AnimationPayload;
 import com.componentsapi.client.payload.SyncPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -26,6 +28,11 @@ public final class ComponentsApiClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(SyncPayload.TYPE,
                 (payload, context) -> context.client().execute(
                         () -> ClientState.get().handle(payload.data())));
+
+        PayloadTypeRegistry.clientboundPlay().register(AnimationPayload.TYPE, AnimationPayload.CODEC);
+        ClientPlayNetworking.registerGlobalReceiver(AnimationPayload.TYPE,
+                (payload, context) -> context.client().execute(
+                        () -> AnimationState.get().handlePacket(payload.data())));
 
         BlockModelRegistry.register();
 
