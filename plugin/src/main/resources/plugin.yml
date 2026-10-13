@@ -15,7 +15,7 @@ commands:
     usage: /capi block|entity ...
   playbedrockanimation:
     description: 播放第一人称基岩手臂动画
-    usage: /playbedrockanimation <player> <namespace:animations/xxx.animation.json> <动画名>
+    usage: /playbedrockanimation <player> <namespace:name> <动画名>
     aliases: [pba]
 
 permissions:

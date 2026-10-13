@@ -4,11 +4,7 @@
   "package": "com.componentsapi.client.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "DisplayEntityRenderStateMixin",
-    "DisplayRendererMixin",
     "FirstPersonRendererMixin",
-    "LivingEntityRenderStateMixin",
-    "LivingEntityRendererMixin",
     "ModelBlockRendererMixin"
   ],
   "injectors": {

@@ -2,6 +2,7 @@ package com.componentsapi.client;
 
 import com.componentsapi.client.bedrock.AnimationState;
 import com.componentsapi.client.bedrock.BedrockReloadListener;
+import com.componentsapi.client.bedrock.KeyBindHandler;
 import com.componentsapi.client.block.BlockModelRegistry;
 import com.componentsapi.client.payload.AnimationPayload;
 import com.componentsapi.client.payload.SyncPayload;
@@ -35,6 +36,9 @@ public final class ComponentsApiClient implements ClientModInitializer {
                         () -> AnimationState.get().handlePacket(payload.data())));
 
         BlockModelRegistry.register();
+
+        // 按键绑定（lc/rc/mc/H 键动画触发）
+        KeyBindHandler.register();
 
         ReloadableResourceManager resourceManager =
                 (ReloadableResourceManager) (Object)

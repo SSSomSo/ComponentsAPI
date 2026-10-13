@@ -14,10 +14,12 @@ import java.util.List;
 
 /**
  * /playbedrockanimation 指令：
- *   playbedrockanimation <player> <namespace:animations/xxx.animation.json> <动画名>
+ *   playbedrockanimation <player> <namespace:name> <动画名>
  *
- * 服务端通过插件消息通道 componentsapi:anim 通知客户端播放第一人称手臂动画。
- * 动画仅在目标玩家的第一人称视角显示，不影响第三人称。
+ * 同名文件规则：一个 modelKey（namespace:name）对应一个同名 .animation.json，
+ * 因此无需再指定动画文件路径。
+ *
+ * 服务端通过 componentsapi:anim 通道通知客户端播放第一人称动画。
  */
 public final class PlayBedrockAnimationCommand implements TabExecutor {
 
@@ -36,7 +38,7 @@ public final class PlayBedrockAnimationCommand implements TabExecutor {
             return true;
         }
         if (args.length < 3) {
-            sender.sendMessage("§c用法: /playbedrockanimation <player> <namespace:animations/xxx.animation.json> <动画名>");
+            sender.sendMessage("§c用法: /playbedrockanimation <player> <namespace:name> <动画名>");
             return true;
         }
 
@@ -46,28 +48,28 @@ public final class PlayBedrockAnimationCommand implements TabExecutor {
             return true;
         }
 
-        String animFile = args[1]; // namespace:animations/xxx.animation.json
+        String modelKey = args[1];  // namespace:name（同名 geo + animation）
         String animName = args[2];
 
         try {
-            byte[] payload = buildPlayPacket(animFile, animName);
+            byte[] payload = buildPacket(modelKey, animName);
             target.sendPluginMessage(plugin, CHANNEL, payload);
             sender.sendMessage("§a已向 " + target.getName() + " 播放动画 " + animName
-                    + " (" + animFile + ")");
+                    + "（模型 " + modelKey + "）");
         } catch (IOException e) {
             sender.sendMessage("§c发送动画包失败: " + e.getMessage());
         }
         return true;
     }
 
-    /** 报文：byte type(0=play) + UTF file + UTF name + int duration(-1=循环) */
-    private byte[] buildPlayPacket(String file, String name) throws IOException {
+    /** 报文：byte type(0=play) + UTF modelKey + UTF animName + int duration(-1=循环) */
+    private byte[] buildPacket(String modelKey, String name) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
-        out.writeByte(0); // 0 = play
-        out.writeUTF(file);
+        out.writeByte(0);
+        out.writeUTF(modelKey);
         out.writeUTF(name);
-        out.writeInt(-1); // 循环播放，直到被新动画覆盖或停止
+        out.writeInt(-1);
         return bytes.toByteArray();
     }
 
@@ -82,13 +84,13 @@ public final class PlayBedrockAnimationCommand implements TabExecutor {
                 }
             }
         } else if (args.length == 2) {
-            result.add("capi:animations/");
+            result.add("capi:example");
         } else if (args.length == 3) {
             result.add("idle");
-            result.add("walk");
             result.add("draw");
             result.add("shoot");
             result.add("reload");
+            result.add("inspect");
         }
         return result;
     }

@@ -167,6 +167,12 @@ public final class BedrockRenderer {
         matrices.popPose();
     }
 
+    /** 公开的立方体发射方法，供物品基岩渲染器复用。 */
+    public static void emitCubePublic(BedrockModel model, Cube cube,
+                                      PoseStack.Pose pose, VertexConsumer consumer, int light) {
+        emitCube(model, cube, pose, consumer, light);
+    }
+
     private static void emitCube(BedrockModel model, Cube cube,
                                  PoseStack.Pose pose, VertexConsumer consumer, int light) {
         float i = cube.inflate;

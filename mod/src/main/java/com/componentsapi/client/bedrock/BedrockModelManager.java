@@ -13,12 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 基岩模型/动画注册表。每次资源重载时重建（含服务端资源包到达后的重载）。
+ * 基岩模型/动画注册表。每次资源重载时重建。
  *
- * 资源约定（资源包内）：
- *   assets/capi/bedrock/&lt;name&gt;.geo.json
- *   assets/capi/bedrock/&lt;name&gt;.animation.json
- *   assets/capi/textures/bedrock/&lt;name&gt;.png
+ * 同名文件规则：一个 modelKey（namespace:name）对应：
+ *   assets/<namespace>/geo_models/<name>.geo.json
+ *   assets/<namespace>/animations/<name>.animation.json
+ *   assets/<namespace>/index/<name>.json
+ *   assets/<namespace>/textures/geo_models/<name>.png（或 textures/bedrock/<name>.png）
+ *
+ * 同时兼容旧的 bedrock/ 目录。
  */
 public final class BedrockModelManager {
 
@@ -26,8 +29,6 @@ public final class BedrockModelManager {
 
     private final Map<String, BedrockModel> models = new HashMap<>();
     private final Map<String, Map<String, BedrockAnimation>> animations = new HashMap<>();
-    /** 完整文件路径（namespace:path）→ 动画名 → 动画。用于第一人称动画按文件查找。 */
-    private final Map<String, Map<String, BedrockAnimation>> animationsByFile = new HashMap<>();
 
     public static BedrockModelManager get() {
         return INSTANCE;
@@ -36,42 +37,68 @@ public final class BedrockModelManager {
     public void load(ResourceManager resourceManager) {
         models.clear();
         animations.clear();
-        animationsByFile.clear();
 
-        // 扫描所有命名空间的 bedrock/ 和 animations/ 目录
-        Map<Identifier, List<Resource>> files =
-                resourceManager.listResourceStacks("bedrock", id -> true);
-        files.putAll(resourceManager.listResourceStacks("animations", id -> true));
+        // 新规范 geo_models/ + 旧 bedrock/ 兼容
+        Map<Identifier, List<Resource>> geoFiles =
+                resourceManager.listResourceStacks("geo_models", id -> true);
+        geoFiles.putAll(resourceManager.listResourceStacks("bedrock", id -> true));
+        // 动画
+        Map<Identifier, List<Resource>> animFiles =
+                resourceManager.listResourceStacks("animations", id -> true);
 
-        for (Map.Entry<Identifier, List<Resource>> entry : files.entrySet()) {
+        for (Map.Entry<Identifier, List<Resource>> entry : geoFiles.entrySet()) {
             Identifier resId = entry.getKey();
             String path = resId.getPath();
+            if (!path.endsWith(".geo.json")) continue;
             String ns = resId.getNamespace();
-            Resource resource = entry.getValue().get(0);
+            String key = ns + ":" + baseName(path, ".geo.json");
             try (InputStreamReader reader = new InputStreamReader(
-                    resource.open(), StandardCharsets.UTF_8)) {
-                if (path.endsWith(".geo.json")) {
-                    String key = ns + ":" + baseName(path, ".geo.json");
-                    models.put(key, BedrockModel.parse(GsonHelper.parse(reader)));
-                } else if (path.endsWith(".animation.json")) {
-                    String key = ns + ":" + baseName(path, ".animation.json");
-                    Map<String, BedrockAnimation> parsed = BedrockAnimation.parseAll(
-                            JsonParser.parseReader(reader).getAsJsonObject());
-                    animations.put(key, parsed);
-                    // 同时按完整文件路径存储（namespace:animations/xxx.animation.json）
-                    String fileKey = ns + ":" + path;
-                    animationsByFile.put(fileKey, parsed);
-                }
+                    entry.getValue().get(0).open(), StandardCharsets.UTF_8)) {
+                models.put(key, BedrockModel.parse(GsonHelper.parse(reader)));
             } catch (Exception e) {
                 com.componentsapi.client.ComponentsApiClient.LOGGER.warn(
-                        "解析基岩资源失败 " + ns + ":" + path + ": " + e.getMessage());
+                        "解析基岩模型失败 " + key + ": " + e.getMessage());
+            }
+        }
+
+        for (Map.Entry<Identifier, List<Resource>> entry : animFiles.entrySet()) {
+            Identifier resId = entry.getKey();
+            String path = resId.getPath();
+            if (!path.endsWith(".animation.json")) continue;
+            String ns = resId.getNamespace();
+            // 同名规则：animations/<name>.animation.json → key = namespace:name
+            String key = ns + ":" + baseName(path, ".animation.json");
+            try (InputStreamReader reader = new InputStreamReader(
+                    entry.getValue().get(0).open(), StandardCharsets.UTF_8)) {
+                Map<String, BedrockAnimation> parsed = BedrockAnimation.parseAll(
+                        JsonParser.parseReader(reader).getAsJsonObject());
+                animations.put(key, parsed);
+            } catch (Exception e) {
+                com.componentsapi.client.ComponentsApiClient.LOGGER.warn(
+                        "解析基岩动画失败 " + key + ": " + e.getMessage());
+            }
+        }
+        // 旧 bedrock/ 目录下的动画也加载
+        for (Map.Entry<Identifier, List<Resource>> entry :
+                resourceManager.listResourceStacks("bedrock", id -> true).entrySet()) {
+            Identifier resId = entry.getKey();
+            String path = resId.getPath();
+            if (!path.endsWith(".animation.json")) continue;
+            String ns = resId.getNamespace();
+            String key = ns + ":" + baseName(path, ".animation.json");
+            if (animations.containsKey(key)) continue;
+            try (InputStreamReader reader = new InputStreamReader(
+                    entry.getValue().get(0).open(), StandardCharsets.UTF_8)) {
+                animations.put(key, BedrockAnimation.parseAll(
+                        JsonParser.parseReader(reader).getAsJsonObject()));
+            } catch (Exception ignored) {
             }
         }
     }
 
-    /** 按完整文件路径查找动画集合（如 capi:animations/test.animation.json）。 */
-    public Map<String, BedrockAnimation> animationsForFile(String namespace, String path) {
-        return animationsByFile.get(namespace + ":" + path);
+    /** 按 modelKey（namespace:name）查找动画集合。 */
+    public Map<String, BedrockAnimation> animationsForModel(String modelKey) {
+        return animations.get(modelKey);
     }
 
     private static String baseName(String path, String suffix) {
@@ -83,13 +110,20 @@ public final class BedrockModelManager {
         return models.get(key);
     }
 
-    /** 选择动画：优先 index 配置的 default_animation；否则移动时选 walk，静止时选 idle。 */
+    /** 获取模型贴图（优先 geo_models/，回退 bedrock/）。 */
+    public static Identifier texture(String modelKey) {
+        int colon = modelKey.indexOf(':');
+        String ns = colon > 0 ? modelKey.substring(0, colon) : "capi";
+        String name = colon > 0 ? modelKey.substring(colon + 1) : modelKey;
+        return Identifier.fromNamespaceAndPath(ns, "textures/geo_models/" + name + ".png");
+    }
+
+    /** 选择动画：优先 index default_animation；否则 walk/idle。 */
     public BedrockAnimation pickAnimation(String key, boolean moving) {
         Map<String, BedrockAnimation> set = animations.get(key);
         if (set == null) {
             return null;
         }
-        // index 配置的默认动画优先
         String defaultAnim = AnimationIndex.get().defaultAnimation(key);
         if (defaultAnim != null) {
             BedrockAnimation anim = set.get(defaultAnim);
@@ -99,11 +133,11 @@ public final class BedrockModelManager {
         }
         BedrockAnimation fallback = null;
         for (BedrockAnimation animation : set.values()) {
-            String name = animation.name.toLowerCase();
-            if (moving && name.contains("walk")) {
+            String n = animation.name.toLowerCase();
+            if (moving && n.contains("walk")) {
                 return animation;
             }
-            if (!moving && name.contains("idle")) {
+            if (!moving && n.contains("idle")) {
                 return animation;
             }
             fallback = animation;

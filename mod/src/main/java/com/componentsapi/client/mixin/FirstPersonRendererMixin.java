@@ -1,8 +1,10 @@
 package com.componentsapi.client.mixin;
 
 import com.componentsapi.client.bedrock.AnimationState;
+import com.componentsapi.client.bedrock.BedrockItemRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
@@ -12,50 +14,35 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 第一人称手臂动画：当 AnimationState 中有正在播放的动画时，
- * 在渲染手持物品手臂前应用基岩动画的骨骼变换。
- *
- * 26.2 新渲染管线：ItemInHandRenderer.submitArmWithItem（私有方法）。
- * 动画仅影响本地玩家的第一人称视角，不影响第三人称。
- * 骨骼名约定：rightArm / righthand_pos（右手），leftArm / lefthand_pos（左手），
- * 兼容 TaCZ/YSM 的 rightArm/leftArm/armRight/armLeft 等命名。
+ * 第一人称手持渲染：
+ * 1) 若物品携带 capi_bedrock_model，则用基岩渲染器渲染整个模型（含偏移、动画、手持挂点），
+ *    取消原版物品/手臂渲染；
+ * 2) 否则若有动画在播放，应用手臂骨骼变换（兼容普通物品）。
  */
-@Mixin(net.minecraft.client.renderer.ItemInHandRenderer.class)
+@Mixin(ItemInHandRenderer.class)
 public abstract class FirstPersonRendererMixin {
 
     private static final float UNIT = 1f / 16f;
 
     @Inject(
             method = "submitArmWithItem",
-            at = @At("HEAD"))
-    private void capi$applyArmAnimation(AbstractClientPlayer player, float partialTick,
+            at = @At("HEAD"),
+            cancellable = true)
+    private void capi$renderBedrockItem(AbstractClientPlayer player, float partialTick,
                                         float pitch, InteractionHand hand, float swingProgress,
                                         ItemStack stack, float equipProgress, PoseStack matrices,
                                         SubmitNodeCollector collector, int light,
                                         CallbackInfo ci) {
-        if (!AnimationState.get().isPlaying()) {
-            return;
-        }
-        // 尝试多种骨骼命名（兼容原版/TaCZ/YSM/基岩定位组）
-        String[] boneNames = hand == InteractionHand.MAIN_HAND
-                ? new String[]{"rightArm", "righthand_pos", "RightArm", "right_arm", "armRight", "rightHand"}
-                : new String[]{"leftArm", "lefthand_pos", "LeftArm", "left_arm", "armLeft", "leftHand"};
-
-        for (String boneName : boneNames) {
-            AnimationState.BoneTransform transform =
-                    AnimationState.get().sample(boneName, partialTick);
-            if (transform != null) {
-                // 应用动画变换（像素 → 方块单位，角度直接用）
-                matrices.translate(
-                        transform.posX * UNIT,
-                        transform.posY * UNIT,
-                        transform.posZ * UNIT);
-                matrices.mulPose(com.mojang.math.Axis.XP.rotationDegrees(transform.rotX));
-                matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(transform.rotY));
-                matrices.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(transform.rotZ));
-                matrices.scale(transform.scaleX, transform.scaleY, transform.scaleZ);
-                break;
+        // 检测基岩物品模型
+        String modelKey = BedrockItemRenderer.modelOf(stack);
+        if (modelKey != null) {
+            // 更新动画状态（仅主手控制模型，副手单独渲染）
+            if (hand == InteractionHand.MAIN_HAND) {
+                AnimationState.get().setHandModel(modelKey);
             }
+            // 用基岩渲染器渲染，取消原版
+            BedrockItemRenderer.renderFirstPerson(modelKey, matrices, collector, light);
+            ci.cancel();
         }
     }
 }
