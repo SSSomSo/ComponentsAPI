@@ -38,6 +38,33 @@ public final class BedrockItemRenderer {
         return null;
     }
 
+    /** 解析模型贴图：优先 index.texture，否则用默认 textures/geo_models/<name>.png。 */
+    public static Identifier textureFor(String modelKey) {
+        AnimationIndex.ModelConfig cfg = AnimationIndex.get().get(modelKey);
+        if (cfg != null && cfg.modelTexture != null && !cfg.modelTexture.isBlank()) {
+            return parseId(cfg.modelTexture);
+        }
+        return BedrockModelManager.texture(modelKey);
+    }
+
+    /** 解析 index 里声明的 slot 图标贴图，null=未配置。 */
+    public static Identifier slotTextureFor(String modelKey) {
+        AnimationIndex.ModelConfig cfg = AnimationIndex.get().get(modelKey);
+        if (cfg != null && cfg.slotTexture != null && !cfg.slotTexture.isBlank()) {
+            return parseId(cfg.slotTexture);
+        }
+        return null;
+    }
+
+    /** 解析 "namespace:path" 形式的标识。 */
+    private static Identifier parseId(String s) {
+        int colon = s.indexOf(':');
+        if (colon > 0) {
+            return Identifier.fromNamespaceAndPath(s.substring(0, colon), s.substring(colon + 1));
+        }
+        return Identifier.fromNamespaceAndPath("capi", s);
+    }
+
     /**
      * 第一人称渲染基岩物品模型。
      *
@@ -55,7 +82,7 @@ public final class BedrockItemRenderer {
         AnimationState state = AnimationState.get();
         ModelConfig cfg = state.getConfig();
 
-        Identifier texture = BedrockModelManager.texture(modelKey);
+        Identifier texture = textureFor(modelKey);
 
         matrices.pushPose();
         // 默认第一人称偏移（右下前，模拟原版），可由 index 配置
@@ -86,7 +113,7 @@ public final class BedrockItemRenderer {
         if (model == null) {
             return;
         }
-        Identifier texture = BedrockModelManager.texture(modelKey);
+        Identifier texture = textureFor(modelKey);
 
         matrices.pushPose();
         matrices.mulPose(com.mojang.math.Axis.XP.rotationDegrees(-90f));

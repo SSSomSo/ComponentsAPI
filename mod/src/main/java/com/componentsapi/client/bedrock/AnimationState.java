@@ -174,9 +174,9 @@ public final class AnimationState {
     private ActiveAnimation build(String modelKey, String animName, boolean loop) {
         Map<String, BedrockAnimation> set = BedrockModelManager.get().animationsForModel(modelKey);
         if (set == null) return null;
-        BedrockAnimation anim = set.get(animName);
+        BedrockAnimation anim = BedrockModelManager.findAnimation(set, animName);
         if (anim == null) return null;
-        return new ActiveAnimation(anim, modelKey, animName,
+        return new ActiveAnimation(anim, modelKey, anim.name,
                 System.currentTimeMillis(), loop);
     }
 

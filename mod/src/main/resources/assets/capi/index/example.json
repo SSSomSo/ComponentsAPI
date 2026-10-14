@@ -1,0 +1,33 @@
+{
+  "default_animation": "idle",
+  "texture": "capi:textures/geo_models/example.png",
+  "slot_texture": "capi:textures/item/example.png",
+  "first_person_offset": {
+    "enabled": true,
+    "x": 0.56,
+    "y": -0.52,
+    "z": 0.72
+  },
+  "switch": {
+    "in": "equip_in",
+    "out": "equip_out"
+  },
+  "keys": {
+    "lc": [
+      { "clicks": 1, "animation": "swing" }
+    ],
+    "rc": [
+      { "clicks": 1, "animation": "block" }
+    ],
+    "mc": [],
+    "h": [
+      { "animation": "inspect" }
+    ]
+  },
+  "animations": {
+    "idle": { "interruptible": true },
+    "walk": { "interruptible": true },
+    "swing": { "interruptible": true },
+    "inspect": { "interruptible": false }
+  }
+}

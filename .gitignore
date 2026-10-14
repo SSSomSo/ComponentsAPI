@@ -9,3 +9,6 @@ build/
 run/
 logs/
 *.log
+
+# 本地开发文档（不提交）
+DEV-README.md

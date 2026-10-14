@@ -27,6 +27,8 @@ import java.util.Map;
  * 格式：
  * {
  *   "default_animation": "idle",
+ *   "texture": "capi:textures/geo_models/example.png",
+ *   "slot_texture": "capi:textures/item/example.png",
  *   "first_person_offset": {"enabled": true, "x": 0.5, "y": -0.5, "z": 1.0},
  *   "switch": {"in": "equip_in", "out": "equip_out"},
  *   "keys": {
@@ -40,6 +42,7 @@ import java.util.Map;
  *   }
  * }
  *
+ * texture=模型 3D 贴图；slot_texture=物品栏 2D 图标（放 textures/item/ 下）
  * 按键：lc=左键, rc=右键, mc=中键, h=持续按键(inspect/检视)
  * clicks 多段：按点击次数依次播放，最后一段完成后再点回到第一段
  */
@@ -79,6 +82,14 @@ public final class AnimationIndex {
         ModelConfig config = new ModelConfig();
         if (root.has("default_animation")) {
             config.defaultAnimation = root.get("default_animation").getAsString();
+        }
+        // 模型 3D 贴图（可含命名空间）
+        if (root.has("texture") && !root.get("texture").isJsonNull()) {
+            config.modelTexture = root.get("texture").getAsString();
+        }
+        // 物品栏 2D 图标贴图（可含命名空间）
+        if (root.has("slot_texture") && !root.get("slot_texture").isJsonNull()) {
+            config.slotTexture = root.get("slot_texture").getAsString();
         }
         // 第一人称偏移
         if (root.has("first_person_offset")) {
@@ -149,6 +160,10 @@ public final class AnimationIndex {
     /** 模型完整配置。 */
     public static final class ModelConfig {
         public String defaultAnimation;
+        /** 模型 3D 贴图，形如 capi:textures/geo_models/example.png；null=用默认路径。 */
+        public String modelTexture;
+        /** 物品栏 2D 图标贴图，形如 capi:textures/item/example.png；null=不替换。 */
+        public String slotTexture;
         public boolean fpEnabled = true;
         public float fpX = 0.56f;   // 右（模拟原版第一人称手持偏移）
         public float fpY = -0.52f; // 下

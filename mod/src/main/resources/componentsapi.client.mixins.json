@@ -5,6 +5,9 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "FirstPersonRendererMixin",
+    "ItemInHandLayerMixin",
+    "PlayerItemInHandLayerMixin",
+    "GuiItemMixin",
     "ModelBlockRendererMixin"
   ],
   "injectors": {

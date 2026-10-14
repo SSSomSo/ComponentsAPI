@@ -101,6 +101,32 @@ public final class BedrockModelManager {
         return animations.get(modelKey);
     }
 
+    /**
+     * 按短名查找动画，兼容完整 key：
+     * 先精确匹配 "animation.example.idle"，再匹配以 ".idle" 结尾，最后以 "idle" 结尾。
+     */
+    public static BedrockAnimation findAnimation(Map<String, BedrockAnimation> set, String name) {
+        if (set == null || name == null) {
+            return null;
+        }
+        BedrockAnimation direct = set.get(name);
+        if (direct != null) {
+            return direct;
+        }
+        String dot = "." + name;
+        for (Map.Entry<String, BedrockAnimation> e : set.entrySet()) {
+            if (e.getKey().endsWith(dot)) {
+                return e.getValue();
+            }
+        }
+        for (Map.Entry<String, BedrockAnimation> e : set.entrySet()) {
+            if (e.getKey().endsWith(name)) {
+                return e.getValue();
+            }
+        }
+        return null;
+    }
+
     private static String baseName(String path, String suffix) {
         String name = path.substring(path.lastIndexOf('/') + 1);
         return name.substring(0, name.length() - suffix.length());
@@ -126,7 +152,7 @@ public final class BedrockModelManager {
         }
         String defaultAnim = AnimationIndex.get().defaultAnimation(key);
         if (defaultAnim != null) {
-            BedrockAnimation anim = set.get(defaultAnim);
+            BedrockAnimation anim = findAnimation(set, defaultAnim);
             if (anim != null) {
                 return anim;
             }
