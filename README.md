@@ -1,11 +1,13 @@
 # ComponentsAPI
 
-让**方块**与**生物**使用符合原版体系的**自定义数据组件**，并通过配套客户端模组完成模型渲染等客户端能力。
+让**方块**与**物品**使用符合原版体系的**自定义数据组件**与**客户端渲染能力**，并通过配套客户端模组完成模型渲染等客户端工作。
 
 - 作者：**Mc_SomSo**
 - 许可证：**CC BY-SA 4.0**
-- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.1.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
-- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.1.0.jar`
+- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.5.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
+- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.5.0.jar`
+
+> **职责边界**：ComponentsAPI 只提供**通用能力**（数据组件 + 渲染管线）；具体的自定义物品/方块/伤害类型等内容全部定义在 **SSCustomItems**（SSCI）中。
 
 ---
 
@@ -14,9 +16,14 @@
 | 组件 | 类型 | 说明 |
 |---|---|---|
 | `capi:block_model` | 字符串（模型标识） | 覆盖该方块的客户端模型，值为 `capi:block/<name>`，模型文件为资源包内 `assets/capi/models/block/<name>.json` |
-| `capi:entity_model` | 字符串（模型标识） | 覆盖该生物的客户端模型。值为 `bedrock/<name>` 时使用**基岩版几何 + 动画**（见第 4 节） |
+| `capi:entity_model` | 字符串（模型标识） | 生物组件通道（保留存储/同步）；**基岩实体模型渲染已停用**，基岩模型现仅用于物品（见第 4 节） |
 | `capi:block_light` | 复合标签 | `{eat_environment_light:false,light:1}`，`light` 为 0–15 的发光等级；`eat_environment_light:true` 时同时清除该位置的天空光（环境光） |
 | `capi:slipperiness` | 浮点 | 预留：表面滑行系数，原样存储与同步 |
+
+物品的基岩模型**不通过组件**绑定，而是在物品的 **custom_data** 中写 `capi_bedrock_model`：
+```json
+"minecraft:custom_data": { "capi_bedrock_model": "capi:example" }
+```
 
 未识别的组件会**原样存储并联网同步**，供其他插件 / 模组扩展。
 
@@ -65,48 +72,94 @@ Paper 26.2 使用 StarLight 光照引擎，`capi:block_light` 通过直接写入
 组件存储在实体的 PDC（`PublicBukkitValues`）中，使用管理指令设置：
 
 ```mcfunction
-/capi entity @e[type=zombie,limit=1] set capi:entity_model "bedrock/example"
-/capi entity @e[type=zombie,limit=1] remove capi:entity_model
+/capi entity @e[type=zombie,limit=1] set capi:some_component "value"
+/capi entity @e[type=zombie,limit=1] remove capi:some_component
 ```
 
 高级用户也可以直接用原版数据指令写入 PDC：
 
 ```mcfunction
-data merge entity @e[limit=1] {PublicBukkitValues:{"capi:entity_model":'"bedrock/example"'}}
+data merge entity @e[limit=1] {PublicBukkitValues:{"capi:some_component":'"value"'}}
 ```
+
+> 注：`capi:entity_model` 仍可作为通用组件存储/同步，但客户端**不再渲染基岩实体模型**（基岩模型已专用于物品）。
 
 ---
 
-## 4. 基岩版实体模型与动画（1.1.0 新增）
+## 4. 基岩版物品模型与动画（核心能力）
 
-ComponentsAPI 客户端可以直接解析**基岩版（Bedrock）几何与动画 JSON** 并在 Java 版中渲染。
+ComponentsAPI 客户端可以直接解析**基岩版（Bedrock）几何与动画 JSON**，并把它们渲染成**物品**——
+第一人称手持、第三人称手持、其他玩家/生物手持、物品栏图标均支持。
 
-### 资源约定（资源包内）
+### 绑定方式
+
+物品通过 custom_data 绑定：`"minecraft:custom_data": { "capi_bedrock_model": "<命名空间>:<名字>" }`。
+
+### 同名三件套（资源包 `assets/<命名空间>/` 下）
+
+一个 `<命名空间>:<名字>` 对应三个同名文件：
 
 ```
-assets/capi/bedrock/<name>.geo.json          # 基岩 geometry（format_version 1.16.0）
-assets/capi/bedrock/<name>.animation.json    # 基岩 animation
-assets/capi/textures/bedrock/<name>.png      # 贴图（盒子 UV）
+geo_models/<名字>.geo.json          # 基岩 geometry（format_version 1.16.0，bones/cubes）
+animations/<名字>.animation.json    # 基岩 animation（含 sound_effects / particle_effects 关键帧）
+index/<名字>.json                   # 动作/贴图/按键/偏移配置（ComponentsAPI 专用）
+textures/geo_models/<名字>.png      # 模型贴图（默认路径）
+textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
 ```
 
-内置示例为 `<name> = example`（一个带行走/待机动画的简易人形）。
-给生物设置 `capi:entity_model` 为 `"bedrock/<name>"` 即可，例如 `"bedrock/example"`。
+### index 配置字段
 
-### 动画选择
+```json
+{
+  "default_animation": "idle",
+  "texture": "capi:textures/geo_models/example.png",
+  "slot_texture": "capi:textures/item/example.png",
+  "first_person_offset": { "enabled": true, "x": 0.56, "y": -0.52, "z": 0.72 },
+  "switch": { "in": "equip_in", "out": "equip_out" },
+  "keys": {
+    "lc": [ { "clicks": 1, "animation": "swing" } ],
+    "rc": [ { "clicks": 1, "animation": "block" } ],
+    "mc": [],
+    "h":  [ { "animation": "inspect" } ]
+  },
+  "animations": {
+    "idle":    { "interruptible": true },
+    "inspect": { "interruptible": false }
+  }
+}
+```
 
-- 生物移动时自动选择动画名中包含 `walk` 的动画；
-- 静止时选择包含 `idle` 的动画；
-- 都没有时播放该模型的任意一个动画；动画支持 `loop`、关键帧 `linear` / `step` 插值。
+- `texture`：3D 模型贴图（可省略，用默认 `textures/geo_models/<名字>.png`）；`slot_texture`：物品栏图标（可省略，省略则显示原版物品图标）。
+- `first_person_offset`：第一人称默认向右/下/前偏移，模拟原版手持，可整体关闭。
+- `switch.in/out`：切入/切出动画（覆盖原版切换动画）。
+- `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `h` 持续按住（检视）；`clicks` 支持多段循环，最后一段播完再点回到第一段。
+- 动画名可写短名（`idle`）或全名（`animation.example.idle`），客户端会自动模糊匹配。
+- **未配置任何动作时，基岩物品不播放任何原版挥动/拉弓/格挡**（第一人称整段被替换）。
+
+### 手臂定位组
+
+模型里定义唯一定位组后，玩家的手会跟随定位块移动（不改变手部纹理）：
+
+- `lefthand_pos`：左手，尺寸 x4 × y12 × z4
+- `righthand_pos`：右手
+
+### 命令播放动画（服务端发起）
+
+```
+/playbedrockanimation <玩家> <命名空间:名字> <动画名>
+```
+别名 `/pba`。一个 index/geo 只对应一个同名 `.animation.json`，因此命令里只传动画名。
 
 ### 支持范围与限制
 
-- 支持：骨骼层级、盒子（盒子 UV / 每面 UV per-face UV）、`inflate`、`mirror`、骨骼/盒子的 `pivot` 与 `rotation`、
-  position / rotation / scale 关键帧、循环、**声音关键帧**（`sound_effects`，3D 定位音，pitch 随机）、
-  **粒子关键帧**（`particle_effects`，支持 `effect` + `locator` 骨骼定位）、
-  每面 UV 旋转（0/90/180/270）；
-- **不支持**：Molang 表达式、`catmull-rom` 插值、带参数粒子（dust 等需额外数据的粒子类型）；
-- 若实测模型朝向或旋转整体反向，属于渲染器符号问题，按源码 `BedrockRenderer` 中的说明调整
-  YP 旋转符号或面顶点顺序即可。
+- 支持：骨骼层级、盒子（盒子 UV 与**每面 UV per-face UV**、每面 UV 旋转 0/90/180/270）、`inflate`、`mirror`、
+  骨骼/盒子的 `pivot` 与 `rotation`、position/rotation/scale 关键帧、循环、
+  **声音关键帧**（`sound_effects`，3D 定位音，pitch 随机）、
+  **粒子关键帧**（`particle_effects`，支持 `effect` + `locator` 骨骼定位）。
+- **不支持**：Molang 表达式、`catmull-rom` 插值、带参数粒子（dust 等需额外数据的粒子类型）。
+- 第三人称手持的旋转/缩放、第一人称偏移目前为经验值，若实测位置或朝向不对可在
+  `BedrockItemRenderer` 中调整。
+- 已**取消**方块/生物的基岩实体模型（方块仍支持第 5 节的原版方块模型）。
 
 ---
 
@@ -155,16 +208,26 @@ assets/capi/textures/block/<name>.png
 
 ## 7. 构建
 
+根目录提供两个一键脚本：
+
+```
+.\build-all.ps1            # 同时构建插件 + 模组
+.\build-all.ps1 -Plugin    # 只构建插件
+.\build-all.ps1 -Mod       # 只构建模组
+.\sync-pack.ps1            # 改了 mod/assets 资源后：同步资源并重打 plugin/pack/capi-pack.zip
+```
+
 ### 插件（需要 JDK 25、Maven）
 
 ```
 mvn -f plugin/pom.xml clean package
 ```
 
-产物：`plugin/target/ComponentsAPI-1.1.0.jar`。
+产物：`plugin/target/ComponentsAPI-1.5.0.jar`。
 
-资源包源文件位于 `resourcepack/`；重新打包资源包后（zip 根目录必须直接是 `pack.mcmeta`，
-条目使用正斜杠），放入 `plugin/pack/capi-pack.zip` 再构建插件即可内置。
+资源包的权威源是 `mod/src/main/resources/assets/`；改完资源跑 `sync-pack.ps1`，会同步到
+`resourcepack/` 并重新生成 `plugin/pack/capi-pack.zip`（zip 根目录必须直接是 `pack.mcmeta`，
+条目使用正斜杠），随后重新构建插件即可内置。
 
 ### 模组（需要 JDK 25、Gradle 9.7）
 
@@ -173,7 +236,7 @@ cd mod
 gradlew build
 ```
 
-产物：`mod/build/libs/ComponentsAPI-mod-1.1.0.jar`。
+产物：`mod/build/libs/ComponentsAPI-mod-1.5.0.jar`（official 命名在 libs）。
 
 Minecraft 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 中没有 client_mappings），
 工程在 `gradle.properties` 中设置 `fabric.loom.disableObfuscation=true`，
@@ -186,10 +249,11 @@ Gradle 发行版若下载缓慢，可将 `gradle/wrapper/gradle-wrapper.properti
 ## 8. 已知限制
 
 1. 纯方块的组件只能用 `/capi block` 管理（兜底索引），不能用 `/data` 指令；
-2. 基岩动画不支持 Molang、catmull-rom、声音/粒子关键帧与 per-face UV；
-3. 内置资源包不支持运行时卸载；
-4. ComponentsAPI 插件必须与 SSCustomItems 同时安装；
-5. 更新插件 / 模组 jar 后请**完整重启**服务端与客户端，不建议使用 PlugManX 等热加载工具。
+2. 基岩动画不支持 Molang、catmull-rom；物品基岩模型的第三人称/第一人称偏移为经验值，未在所有情况下实测；
+3. 基岩模型只服务**物品**，方块/生物不再使用基岩实体模型；
+4. 内置资源包不支持运行时卸载；
+5. ComponentsAPI 插件必须与 SSCustomItems 同时安装；
+6. 更新插件 / 模组 jar 后请**完整重启**服务端与客户端，不建议使用 PlugManX 等热加载工具。
 
 ---
 
