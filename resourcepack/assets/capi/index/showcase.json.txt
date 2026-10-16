@@ -1,0 +1,116 @@
+// ============================================================================
+// ComponentsAPI 物品基岩模型 index「全功能占位示例」
+// 用法：参考本文件编写 index/<name>.json，删掉所有 // 注释（真正的 .json 不能有注释）。
+// 同名三件套：geo_models/<name>.geo.json
+//            animations/<name>.animation.json
+//            index/<name>.json（本文件）
+//
+// 按键 keys：
+//   - 鼠标键：lc=左键  rc=右键  mc=中键（天然为“点击”，可写 clicks 多段）
+//   - fp=切换第一人称是否模拟原版手持（默认 R 键，toggle）
+//   - 其余键盘键名（小写）：
+//       字母 a..z（例如 a b q r）；数字 0..9；功能键 f1..f25
+//       space 空格  enter/return 回车  esc/escape 退出  tab  backspace
+//       up down left right 方向键
+//       insert delete home end pageup pagedown
+//       capslock scrolllock numlock printscreen pause
+//       lshift rshift lctrl rctrl lalt ralt lsuper rsuper menu
+//       小键盘 kp0..kp9 kpdecimal kpdivide kpmultiply kpsubtract
+//              kpadd kpenter kpequal
+//       符号 minus(-) equal(=) leftbracket([) rightbracket(]) backslash(\)
+//              semicolon(;) apostrophe(') grave(`) comma(,) period(.) slash(/)
+//   - 判定规则：动作里写了 "clicks" => 点击序列（多段循环，最后一段后再点回到第 1 段）；
+//               没写 "clicks" 的键盘键 => 按住（hold）：按下播动画、松开回默认。
+// 动画属性（animations）：
+//   interruptible=true 可被打断（默认）；false 不可打断；
+//   force / force_play=true 强制播放（除切换/丢弃/死亡等以外不可打断）。
+// ============================================================================
+{
+  "default_animation": "idle",          // 无操作时播放；缺省则回退到名字含 idle 的动画
+
+  "texture": "capi:textures/geo_models/showcase.png",      // 模型 3D 贴图
+  "slot_texture": "capi:textures/item/showcase.png",       // 物品栏 2D 图标（textures/item/）
+
+  "enchantment_glint": false,           // 是否允许附魔光效，默认 false（关闭以节省资源）
+
+  "ignored_bones": ["some_hidden_bone"], // 默认忽略不渲染的骨骼组（含其子层级，按名称）
+
+  "first_person_offset": {              // 第一人称把模型往右下前偏移（模拟原版，可关）
+    "enabled": true,
+    "x": 0.56,   // 右
+    "y": -0.52,  // 下
+    "z": 0.72    // 前
+  },
+
+  "switch": {                           // 切换手持时覆盖原版的切入/切出动画
+    "in": "equip_in",
+    "out": "equip_out"
+  },
+
+  "keys": {
+    // 鼠标左键：两段点击，第 1 次 swing，第 2 次 cast，再点回到第 1 段
+    "lc": [
+      { "clicks": 1, "animation": "swing" },
+      { "clicks": 2, "animation": "cast" }
+    ],
+    // 鼠标右键：格挡
+    "rc": [
+      { "clicks": 1, "animation": "block" }
+    ],
+    // 中键默认无动作（可照 lc 写）
+    "mc": [],
+
+    // 按住检视（无 clicks => hold：按下播 inspect，松开回默认）
+    "h": [
+      { "animation": "inspect" }
+    ],
+
+    // 切换第一人称模拟原版手持（toggle）
+    "fp": [
+      {
+        "toggle_first_person": true,
+        "block_animations": true,                 // 模拟原版时压制其他按键动画（默认 true）
+        "to_vanilla_animation": "fp_to_vanilla", // 基岩→原版退场关键帧（过渡期间强制）
+        "to_bedrock_animation": "fp_to_bedrock"  // 原版→基岩进场关键帧
+      }
+    ],
+
+    // ---- 下面是各类键盘键的写法示例，按需启用（去掉注释）----
+    // 字母键（点击）：
+    // "q": [ { "clicks": 1, "animation": "cast" } ],
+    // 字母键（按住，无 clicks）：
+    // "v": [ { "animation": "aim" } ],
+    // 数字键：
+    // "1": [ { "clicks": 1, "animation": "swing" } ],
+    // 功能键：
+    // "f5": [ { "clicks": 1, "animation": "cast" } ],
+    // 方向键：
+    // "up": [ { "clicks": 1, "animation": "idle" } ],
+    // 小键盘：
+    // "kp0": [ { "clicks": 1, "animation": "cast" } ],
+    // 符号键：
+    // "grave": [ { "clicks": 1, "animation": "inspect" } ],
+    // 修饰键：
+    // "rshift": [ { "animation": "aim" } ],
+    // 空格 / 回车 / 退格：
+    // "space": [ { "clicks": 1, "animation": "cast" } ],
+    // "enter": [ { "clicks": 1, "animation": "cast" } ],
+    // "backspace": [ { "clicks": 1, "animation": "cast" } ],
+    // 多段点击也适用于任意键（clicks 从 1 递增）：
+    // "f": [
+    //   { "clicks": 1, "animation": "swing" },
+    //   { "clicks": 2, "animation": "cast" },
+    //   { "clicks": 3, "animation": "inspect" }
+    // ]
+  },
+
+  "animations": {
+    "idle":    { "interruptible": true },
+    "swing":   { "interruptible": true },
+    "block":   { "interruptible": false },       // 播放期间普通按键不可打断
+    "inspect": { "interruptible": false },
+    "cast":    { "force": true },                // 强制播放：仅切换/丢弃/死亡等可打断
+    "fp_to_vanilla": { "interruptible": false },
+    "fp_to_bedrock":  { "interruptible": false }
+  }
+}

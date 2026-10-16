@@ -1,0 +1,111 @@
+// ============================================================================
+// ComponentsAPI 基岩几何模型「全功能占位示例」
+// 用法：参考本文件编写 geo_models/<name>.geo.json，删掉所有 // 注释与本说明。
+// 命名约定：index/<name>.json、animations/<name>.animation.json、
+//           geo_models/<name>.geo.json 三者同名。
+// 单位：基岩像素（16 = 1 方块），y 轴向上；实体模型原点在脚部，
+//       手持物品会由 righthand_pos/lefthand_pos 锚点重定位。
+// 两种 UV 都在本文件演示：
+//   盒子 UV  : cube "uv": [u, v]
+//   每面 UV : cube "uv": { "north": {"uv":[...], "uv_size":[w,h]}, ... }
+//   面名固定顺序：north / south / east / west / up / down
+// 手臂定位组（组名唯一，全局通用）：
+//   righthand_pos = 右手、lefthand_pos = 左手；定位块尺寸 x4 y12 z4。
+//   可同时写 "capi:hand": "right"/"left" 以兼容显式挂点。
+// ============================================================================
+{
+  "format_version": "1.16.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.showcase",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 3,
+        "visible_bounds_height": 3,
+        "visible_bounds_offset": [0, 1.5, 0]
+      },
+      "bones": [
+        // ---- 根骨骼：一个“盒子 UV”立方体（uv 为贴图左上角起点）----
+        {
+          "name": "root",
+          "pivot": [0, 24, 0],
+          "cubes": [
+            {
+              "origin": [-4, 20, -4],
+              "size": [8, 8, 8],
+              "uv": [0, 0],
+              "inflate": 0.0
+            },
+            // ---- 同一骨骼里的“每面 UV”立方体（per-face UV）----
+            // uv = 左上角，uv_size = 宽高（允许负值表示翻转）；
+            // 未写的面不绘制；rotation 仅支持 0/90/180/270。
+            {
+              "origin": [-3, 8, -3],
+              "size": [6, 6, 6],
+              "uv": {
+                "north": { "uv": [0, 12], "uv_size": [6, 6] },
+                "south": { "uv": [6, 12], "uv_size": [6, 6] },
+                "east":  { "uv": [12, 12], "uv_size": [6, 6] },
+                "west":  { "uv": [18, 12], "uv_size": [6, 6] },
+                "up":    { "uv": [24, 12], "uv_size": [6, 6], "rotation": 180 },
+                "down":  { "uv": [30, 12], "uv_size": [6, 6] }
+              }
+            }
+          ]
+        },
+
+        // ---- 一个可旋转 / 镜像 / 膨胀的子骨骼（演示 pivot/rotation/mirror）----
+        {
+          "name": "barrel",
+          "parent": "root",
+          "pivot": [0, 28, 0],
+          "rotation": [0, 45, 0],
+          "cubes": [
+            {
+              "origin": [-1.5, 28, -1.5],
+              "size": [3, 6, 3],
+              "uv": [0, 32],
+              "inflate": 0.25,
+              "mirror": false,
+              "pivot": [0, 31, 0],
+              "rotation": [0, 0, 0]
+            }
+          ]
+        },
+
+        // ---- 右手臂定位组：定位块尺寸 x4 y12 z4，手臂跟随该组 ----
+        // 骨骼名以 _pos 结尾即被识别为定位组；pivot 为锚点。
+        {
+          "name": "righthand_pos",
+          "parent": "root",
+          "pivot": [-6, 12, 0],
+          "capi:hand": "right",
+          "cubes": [
+            {
+              "origin": [-8, 0, -2],
+              "size": [4, 12, 4],
+              "uv": [40, 32]
+            }
+          ]
+        },
+
+        // ---- 左手臂定位组（镜像）----
+        {
+          "name": "lefthand_pos",
+          "parent": "root",
+          "pivot": [6, 12, 0],
+          "capi:hand": "left",
+          "cubes": [
+            {
+              "origin": [4, 0, -2],
+              "size": [4, 12, 4],
+              "uv": [40, 16],
+              "mirror": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

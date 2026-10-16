@@ -108,6 +108,92 @@
           }
         }
       }
+    },
+    "animation.example.swing": {
+      "loop": false,
+      "animation_length": 0.4,
+      "sound_effects": {
+        "0.0": { "effect": "capi:swing", "volume": 0.8, "pitch": 1.0 }
+      },
+      "particle_effects": {
+        "0.15": { "effect": "minecraft:critical_hit", "locator": "handR" }
+      },
+      "bones": {
+        "armR": {
+          "rotation": {
+            "0.0": [0, 0, 0],
+            "0.15": [-90, 0, 0],
+            "0.4": [0, 0, 0]
+          }
+        }
+      }
+    },
+    "animation.example.block": {
+      "loop": false,
+      "animation_length": 0.25,
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "0.25": [0.2, 0.4, 0.6]
+          },
+          "rotation": {
+            "0.0": [0, 0, 0],
+            "0.25": [-12, 0, 0]
+          }
+        }
+      }
+    },
+    "animation.example.inspect": {
+      "loop": "hold_on_last_frame",
+      "animation_length": 0.5,
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "0.5": [0, 1.2, 1.6]
+          },
+          "rotation": {
+            "0.0": [0, 0, 0],
+            "0.5": [-20, 0, 0]
+          }
+        }
+      }
+    },
+    "animation.example.equip_in": {
+      "loop": false,
+      "animation_length": 0.3,
+      "sound_effects": {
+        "0.0": { "effect": "capi:draw", "volume": 0.6, "pitch": [0.9, 1.1] }
+      },
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, -2, 0],
+            "0.3": [0, 0, 0]
+          },
+          "scale": {
+            "0.0": [0.4, 0.4, 0.4],
+            "0.3": [1, 1, 1]
+          }
+        }
+      }
+    },
+    "animation.example.equip_out": {
+      "loop": false,
+      "animation_length": 0.25,
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "0.25": [0, -2, 0]
+          },
+          "scale": {
+            "0.0": [1, 1, 1],
+            "0.25": [0.4, 0.4, 0.4]
+          }
+        }
+      }
     }
   }
 }

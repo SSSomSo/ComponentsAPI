@@ -10,7 +10,8 @@
     "GuiItemMixin",
     "ModelBlockRendererMixin",
     "ItemModelResolverMixin",
-    "ItemStackRenderStateAccessor"
+    "ItemStackRenderStateAccessor",
+    "PackRepositoryAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

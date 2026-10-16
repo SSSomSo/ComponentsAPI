@@ -1,0 +1,94 @@
+// ============================================================================
+// ComponentsAPI 基岩动画「全功能占位示例」
+// 用法：参考本文件编写 animations/<name>.animation.json，删掉所有 // 注释。
+// 动画名约定：animation.<name>.<动作名>，index 里只填 <动作名>。
+// 支持：
+//   bones.<bone>.position / rotation / scale 关键帧（线性；也可 step 阶跃）
+//   顶层 sound_effects（声音关键帧，走原版 sounds 体系，可被 /playsound 识别）
+//   顶层 particle_effects（粒子关键帧，locator 写骨骼名即在骨骼处生成）
+// 同一时刻可写数组（多个声音/粒子）；声音 pitch 可写 [min,max] 随机音调。
+// 关键帧值也可写成 { "vector": [x,y,z], "lerp_mode": "linear|step" }。
+// ============================================================================
+{
+  "format_version": "1.16.0",
+  "animations": {
+
+    // ---- 默认待机动画（循环，演示位移 + 旋转 + 声音关键帧）----
+    "animation.showcase.idle": {
+      "loop": true,
+      "animation_length": 2.0,
+      "sound_effects": {
+        // 单刻单个声音：effect 对应 assets/capi/sounds.json 里的键
+        "1.0": { "effect": "capi:draw", "volume": 0.4, "pitch": 1.2 },
+        // 同刻多个声音：写成数组
+        "2.0": [
+          { "effect": "capi:swing", "volume": 0.3, "pitch": 1.0 },
+          { "effect": "capi:draw", "volume": 0.2, "pitch": [0.9, 1.1] }
+        ]
+      },
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "1.0": [0, 0.5, 0],
+            "2.0": [0, 0, 0]
+          }
+        },
+        "barrel": {
+          "rotation": {
+            // 演示 {vector, lerp_mode} 形式；step = 阶跃（不插值）
+            "0.0": { "vector": [0, 0, 0], "lerp_mode": "linear" },
+            "1.0": { "vector": [0, 45, 0], "lerp_mode": "step" },
+            "2.0": [0, 360, 0]
+          },
+          "scale": {
+            "0.0": [1, 1, 1],
+            "1.0": [1.1, 1.1, 1.1],
+            "2.0": [1, 1, 1]
+          }
+        }
+      }
+    },
+
+    // ---- 一次性技能动画（演示粒子关键帧，locator 为骨骼名）----
+    "animation.showcase.cast": {
+      "loop": false,
+      "animation_length": 1.0,
+      "particle_effects": {
+        "0.1": { "effect": "minecraft:enchanted_hit", "locator": "barrel" },
+        "0.5": [
+          { "effect": "minecraft:flame", "locator": "root" },
+          { "effect": "minecraft:critical_hit", "locator": "righthand_pos" }
+        ]
+      },
+      "sound_effects": {
+        "0.0": { "effect": "capi:swing", "volume": 1.0, "pitch": [0.8, 1.2] }
+      },
+      "bones": {
+        "barrel": {
+          "rotation": {
+            "0.0": [0, 0, 0],
+            "1.0": [0, 720, 0]
+          },
+          "scale": {
+            "0.0": [0.6, 0.6, 0.6],
+            "0.5": [1.4, 1.4, 1.4],
+            "1.0": [1, 1, 1]
+          }
+        }
+      }
+    },
+
+    // ---- hold_on_last_frame：播放后停在最后一帧（用于检视/瞄准）----
+    "animation.showcase.aim": {
+      "loop": "hold_on_last_frame",
+      "animation_length": 0.4,
+      "bones": {
+        "root": {
+          "position": { "0.0": [0, 0, 0], "0.4": [0, -1, 2] },
+          "rotation": { "0.0": [0, 0, 0], "0.4": [-8, 0, 0] }
+        }
+      }
+    }
+  }
+}

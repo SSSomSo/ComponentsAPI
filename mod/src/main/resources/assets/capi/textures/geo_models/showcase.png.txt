@@ -1,0 +1,8 @@
+占位文件：这里应放置基岩模型的 3D 贴图（真正的 PNG）。
+
+- 目标文件名：showcase.png（与本文件同目录，去掉 .txt）
+- 由 index/<name>.json 的 "texture" 字段引用：
+  "texture": "capi:textures/geo_models/showcase.png"
+- 尺寸需与 geo 文件 description 中的 texture_width / texture_height 一致（示例 64 x 64）。
+- 盒子 UV 与每面 UV（per-face UV）都在这张贴图上取像素。
+- 真正打包进资源包时必须是二进制 .png，不能是本说明文本。

@@ -37,6 +37,11 @@
     "idle": { "interruptible": true },
     "walk": { "interruptible": true },
     "swing": { "interruptible": true },
-    "inspect": { "interruptible": false }
+    "block": { "interruptible": false },
+    "inspect": { "interruptible": false },
+    "equip_in": { "interruptible": false },
+    "equip_out": { "interruptible": false },
+    "fp_to_vanilla": { "interruptible": false },
+    "fp_to_bedrock": { "interruptible": false }
   }
 }

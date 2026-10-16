@@ -1,0 +1,23 @@
+占位文件：自定义声音请放到 assets/capi/sounds/ 目录下的 .ogg（OGG Vorbis）。
+
+示例（去掉 .txt 并改成真实 ogg）：
+  assets/capi/sounds/showcase/cast.ogg
+  assets/capi/sounds/showcase/aim.ogg
+
+然后在 assets/capi/sounds.json 里注册（sounds.json 是真正会被加载的文件，不能有注释）：
+{
+  "cast": {
+    "category": "player",
+    "subtitle": "capi.subtitle.cast",
+    "sounds": [ { "name": "capi:showcase/cast", "stream": false, "volume": 1.0 } ]
+  },
+  "aim": {
+    "category": "player",
+    "subtitle": "capi.subtitle.aim",
+    "sounds": [ { "name": "capi:showcase/aim", "stream": false, "volume": 0.8 } ]
+  }
+}
+
+动画 sound_effects 的 "effect": "capi:cast" 即引用这里注册的键，
+声音走原版声音体系，可被 /playsound capi:cast master @a 播放。
+也可直接复用原版声音（"name": "minecraft:entity/player/attack/attack1"）。

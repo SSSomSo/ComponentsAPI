@@ -4,8 +4,8 @@
 
 - 作者：**Mc_SomSo**
 - 许可证：**CC BY-SA 4.0**
-- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.8.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
-- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.8.0.jar`
+- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.9.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
+- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.9.0.jar`
 
 > **职责边界**：ComponentsAPI 只提供**通用能力**（数据组件 + 渲染管线）；具体的自定义物品/方块/伤害类型等内容全部定义在 **SSCustomItems**（SSCI）中。
 
@@ -138,7 +138,8 @@ textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
 - `ignored_bones`：按**骨骼组名称**列出的组默认不渲染（含其全部子层级 cubes）；基岩模型同名组在单文件内唯一，直接填组名即可。
 - `first_person_offset`：第一人称默认向右/下/前偏移，模拟原版手持，可整体关闭。
 - `switch.in/out`：切入/切出动画（覆盖原版切换动画）。
-- `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `h` 持续按住（检视）/ `fp` 第一人称切换（默认 **R 键**）；`clicks` 支持多段循环，最后一段播完再点回到第一段。
+- `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `fp` 第一人称切换（默认 **R 键**）；**此外支持键盘上几乎所有按键**——字母 `a-z`、数字 `0-9`、功能键 `f1-f25`、方向键、空格/回车/退格、符号键、小键盘、左右修饰键等，完整键名清单见示例 `index/showcase.json.txt` 与源码 `KeyNames.java`。
+  - **点击 vs 按住**：动作里写了 `clicks` 即“点击序列”（多段循环，最后一段播完再点回到第一段）；没写 `clicks` 的键盘键视为“按住（hold）”——按下播放动画、松开回默认（`h` 检视即典型按住键）。鼠标键 `lc/rc/mc` 始终是点击。
   - `fp` 的动作用 `toggle_first_person:true` 标记：按下后切换第一人称是否**模拟原版手持**（开启后第一人称交回原版渲染，模型/贴图仍在）；
   - `block_animations`（默认 `true`）：开启原版模拟时**压制其他按键动画**（此时按 lc/rc/mc/h 不会出现对应动画，再按一次 fp 关闭后恢复）；设为 `false` 则不冲突。
   - `to_vanilla_animation` / `to_bedrock_animation`：切换时播放的**关键帧过渡动画**——切入模拟（基岩→原版）时先播 `to_vanilla_animation`（基岩模型退场，动画结束后才交原版手持渲染）；切回（原版→基岩）时先恢复基岩渲染并播 `to_bedrock_animation`（进场）。不写则回退 `switch.out` / `switch.in`，都没有则瞬间切换。过渡期间强制，普通按键（lc/rc/mc/h 及再次按 fp）都不能打断，只有切换物品、丢弃、死亡可打断。
@@ -219,6 +220,31 @@ assets/capi/textures/block/<name>.png
 客户端在资源加载时自动扫描 `assets/capi/models/block/` 并参与官方烘焙，
 `capi:block_model` 值填 `capi:block/<name>` 即可引用。
 
+### 示例包与占位文件
+
+内置资源包除了可直接加载的 `example`（geo/animation/index + 真实贴图）外，还附带一组**全功能占位示例** `showcase.*`，
+覆盖盒子 UV、每面 UV、手臂定位组、位移/旋转/缩放关键帧、声音与粒子关键帧、全字段 index、全键盘绑定、方块模型等。
+这些文件以 `.json.txt` / `.png.txt` / `.ogg.txt` 结尾（因扩展名不是 `.json/.png/.ogg`，加载器不会解析、也不会报错），
+内部可自由写 `//` 注释，供你参考；**实际使用时去掉 `.txt` 后缀并删除注释**。
+
+### 加密资源包（可选，`.dat`）
+
+用于把自定义资源包内容加密后分发：解密后的资源**只在内存中**存在，运行时不向磁盘（包括临时目录）写出，
+加密后的 `.dat` 必须**放进模组 jar**（`mod/src/main/resources/capi_packs/`）才会加载。
+
+- 加密为自定义容器：**AES-256-GCM 认证加密**（不是 ZIP 自带加密，无法用压缩软件打开）；
+  密钥材料为 **64 字节（512 位）** 随机数据，以 base64 存在 `config/capi/config.toml` 的 `resource_pack_key`，
+  经每包随机 salt + SHA-512 派生出 32 字节 AES 密钥；GCM 同时保证机密性与完整性（密钥错误 / 被篡改即解密失败）。
+- 工作流：
+  1. 启动一次客户端，自动生成 `config/capi/config.toml`（含 512 位密钥）；
+  2. 把待加密资源包 `.zip` 放入 `config/capi/rp/`；
+  3. 再次启动，模组自动把它们加密成 `config/capi/rp/dat/<同名>.dat`；
+  4. 把 `.dat` 放入 `mod/src/main/resources/capi_packs/`，重新构建模组 jar 即可。
+- 密钥请妥善保管，丢失后已发布的 `.dat` 无法解密；同一套资源包请用同一把密钥。
+
+> 说明：内置推送资源包 `capi-pack.zip`（第 5 节）与加密 `.dat` 是两条并行通道——前者由插件服务端推送、内容不加密；
+> 后者用于随模组 jar 分发、需要加密保护的内容。
+
 ---
 
 ## 6. 网络同步
@@ -249,7 +275,7 @@ assets/capi/textures/block/<name>.png
 mvn -f plugin/pom.xml clean package
 ```
 
-产物：`plugin/target/ComponentsAPI-1.8.0.jar`。
+产物：`plugin/target/ComponentsAPI-1.9.0.jar`。
 
 资源包的权威源是 `mod/src/main/resources/assets/`；改完资源跑 `sync-pack.ps1`，会同步到
 `resourcepack/` 并重新生成 `plugin/pack/capi-pack.zip`（zip 根目录必须直接是 `pack.mcmeta`，
@@ -262,7 +288,7 @@ cd mod
 gradlew build
 ```
 
-产物：`mod/build/libs/ComponentsAPI-mod-1.8.0.jar`（official 命名在 libs）。
+产物：`mod/build/libs/ComponentsAPI-mod-1.9.0.jar`（official 命名在 libs）。
 
 Minecraft 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 中没有 client_mappings），
 工程在 `gradle.properties` 中设置 `fabric.loom.disableObfuscation=true`，

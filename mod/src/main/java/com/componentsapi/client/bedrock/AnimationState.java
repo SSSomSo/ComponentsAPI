@@ -31,10 +31,10 @@ public final class AnimationState {
     private String prevModel;
     /** 切出动画待播放（模型切换瞬间）。 */
     private ActiveAnimation switchOutPending;
-    /** 各按键当前点击次数（多段循环）。 */
-    private final int[] clickCounts = new int[256];
-    /** h 键是否按住。 */
-    private boolean holdingH;
+    /** 各键当前点击次数（多段循环）。 */
+    private final java.util.Map<String, Integer> clickCounts = new java.util.HashMap<>();
+    /** 当前按住的 hold 键名（无则 null）。 */
+    private String holdKey;
     /** 第一人称是否模拟原版手持（toggle，按键切换）。 */
     private boolean vanillaFpMode;
     /** 原版模拟状态下是否压制其他按键动画（默认 true）。 */
@@ -116,21 +116,21 @@ public final class AnimationState {
         List<KeyAction> actions = cfg.keyActions.get(key);
         if (actions == null || actions.isEmpty()) return;
 
-        int idx = keyToIndex(key);
-        clickCounts[idx]++;
-        if (clickCounts[idx] > actions.size()) {
-            clickCounts[idx] = 1;
+        int count = clickCounts.getOrDefault(key, 0) + 1;
+        if (count > actions.size()) {
+            count = 1;
         }
+        clickCounts.put(key, count);
         // 找到对应 clicks 的动作（clicks 从 1 开始）
         KeyAction target = null;
         for (KeyAction a : actions) {
-            if (a.clicks == clickCounts[idx]) {
+            if (a.clicks == count) {
                 target = a;
                 break;
             }
         }
         if (target == null) {
-            target = actions.get(clickCounts[idx] - 1);
+            target = actions.get(count - 1);
         }
         if (target == null) return;
 
@@ -187,28 +187,50 @@ public final class AnimationState {
         }
     }
 
-    /** h 持续按键状态。 */
+    /** h 持续按键状态（兼容旧入口，等价于 setHold("h", held)）。 */
     public void setHoldH(boolean held) {
-        this.holdingH = held;
-        if (handModel == null) return;
-        ModelConfig cfg = AnimationIndex.get().get(handModel);
-        if (cfg == null) return;
-        List<KeyAction> actions = cfg.keyActions.get("h");
-        if (actions == null || actions.isEmpty()) return;
+        setHold("h", held);
+    }
 
-        // fp 过渡进行中：检视按键不参与（held 与松开都不打断过渡）
-        if (fpTransition != null) return;
+    /**
+     * 通用按住状态：按下播放该键第一个动作的动画，松开回到默认。
+     * 多个 hold 键互斥（同时按住时后按的覆盖），与渲染只播放一条动画一致。
+     */
+    public void setHold(String key, boolean held) {
+        if (handModel == null) {
+            holdKey = null;
+            return;
+        }
+        ModelConfig cfg = AnimationIndex.get().get(handModel);
+        if (cfg == null) {
+            return;
+        }
+        List<KeyAction> actions = cfg.keyActions.get(key);
+        if (actions == null || actions.isEmpty()) {
+            return;
+        }
+
+        // fp 过渡进行中：按住键不参与（held 与松开都不打断过渡）
+        if (fpTransition != null) {
+            return;
+        }
 
         if (held) {
+            holdKey = key;
             KeyAction a = actions.get(0);
             // 原版模拟压制 / 强制播放阻断
-            if (vanillaFpMode && fpBlockAnimations) return;
-            if (!canInterruptCurrent()) return;
+            if (vanillaFpMode && fpBlockAnimations) {
+                return;
+            }
+            if (!canInterruptCurrent()) {
+                return;
+            }
             if (a.animation != null) {
                 current = build(handModel, a.animation, true);
             }
-        } else {
-            // 松开后回到默认
+        } else if (key.equals(holdKey)) {
+            // 松开当前按住的键后回到默认
+            holdKey = null;
             startDefault(handModel);
         }
     }
@@ -358,22 +380,12 @@ public final class AnimationState {
     }
 
     private void resetClicks() {
-        java.util.Arrays.fill(clickCounts, 0);
-        holdingH = false;
+        clickCounts.clear();
+        holdKey = null;
         vanillaFpMode = false;
         fpBlockAnimations = true;
         fpTransition = null;
         fpTransitionToVanilla = false;
-    }
-
-    private static int keyToIndex(String key) {
-        return switch (key) {
-            case "lc" -> 0;
-            case "rc" -> 1;
-            case "mc" -> 2;
-            case "fp" -> 4;
-            default -> 3;
-        };
     }
 
     public static final class BoneTransform {

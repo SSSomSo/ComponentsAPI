@@ -1,0 +1,21 @@
+// ============================================================================
+// ComponentsAPI 自定义方块模型「占位示例」（原版方块模型格式，非基岩 geo）
+// 用法：另存为 models/block/<name>.json（去掉 .txt 与所有 // 注释）。
+// 组件里填写 capi:block_model = "capi:block/<name>"。
+// 性能：自定义方块模型在区块网格构建时按区块过滤烘焙，不逐帧渲染。
+// 全部面相同：parent "minecraft:block/cube_all"，textures.all；
+// 上/下/侧面不同：parent "minecraft:block/cube_bottom_top"；
+// 六面任意：parent "minecraft:block/cube"，逐面 north/south/east/west/up/down。
+// ============================================================================
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "capi:block/showcase_side",
+    "north": "capi:block/showcase_front",
+    "south": "capi:block/showcase_side",
+    "east":  "capi:block/showcase_side",
+    "west":  "capi:block/showcase_side",
+    "up":    "capi:block/showcase_top",
+    "down":  "capi:block/showcase_bottom"
+  }
+}

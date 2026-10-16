@@ -113,37 +113,42 @@ public final class AnimationIndex {
             if (sw.has("in")) config.switchIn = sw.get("in").getAsString();
             if (sw.has("out")) config.switchOut = sw.get("out").getAsString();
         }
-        // 按键绑定
+        // 按键绑定：keys 下允许任意键名（鼠标 lc/rc/mc、fp 别名及 KeyNames 支持的全部键盘键）
         if (root.has("keys")) {
             JsonObject keys = root.getAsJsonObject("keys");
-            for (String key : new String[]{"lc", "rc", "mc", "h", "fp"}) {
-                if (keys.has(key)) {
-                    List<KeyAction> actions = new ArrayList<>();
-                    for (JsonElement el : keys.getAsJsonArray(key)) {
-                        JsonObject ao = el.getAsJsonObject();
-                        KeyAction action = new KeyAction();
-                        if (ao.has("clicks")) action.clicks = ao.get("clicks").getAsInt();
-                        if (ao.has("animation")) action.animation = ao.get("animation").getAsString();
-                        // 切换第一人称模拟原版手持（toggle）
-                        if (ao.has("toggle_first_person")) {
-                            action.toggleFirstPerson = ao.get("toggle_first_person").getAsBoolean();
-                        }
-                        // 开启原版模拟时是否压制其他按键动画（默认 true，冲突）
-                        if (ao.has("block_animations")) {
-                            action.blockAnimations = ao.get("block_animations").getAsBoolean();
-                        }
-                        // 切入模拟原版手持（基岩→原版）的过渡关键帧动画
-                        if (ao.has("to_vanilla_animation") && !ao.get("to_vanilla_animation").isJsonNull()) {
-                            action.toVanillaAnimation = ao.get("to_vanilla_animation").getAsString();
-                        }
-                        // 切回基岩（原版→基岩）的过渡关键帧动画
-                        if (ao.has("to_bedrock_animation") && !ao.get("to_bedrock_animation").isJsonNull()) {
-                            action.toBedrockAnimation = ao.get("to_bedrock_animation").getAsString();
-                        }
-                        actions.add(action);
-                    }
-                    config.keyActions.put(key, actions);
+            for (String key : keys.keySet()) {
+                JsonElement arrEl = keys.get(key);
+                if (!arrEl.isJsonArray()) {
+                    continue;
                 }
+                List<KeyAction> actions = new ArrayList<>();
+                for (JsonElement el : arrEl.getAsJsonArray()) {
+                    JsonObject ao = el.getAsJsonObject();
+                    KeyAction action = new KeyAction();
+                    if (ao.has("clicks")) {
+                        action.clicks = ao.get("clicks").getAsInt();
+                        action.hasClicks = true;
+                    }
+                    if (ao.has("animation")) action.animation = ao.get("animation").getAsString();
+                    // 切换第一人称模拟原版手持（toggle）
+                    if (ao.has("toggle_first_person")) {
+                        action.toggleFirstPerson = ao.get("toggle_first_person").getAsBoolean();
+                    }
+                    // 开启原版模拟时是否压制其他按键动画（默认 true，冲突）
+                    if (ao.has("block_animations")) {
+                        action.blockAnimations = ao.get("block_animations").getAsBoolean();
+                    }
+                    // 切入模拟原版手持（基岩→原版）的过渡关键帧动画
+                    if (ao.has("to_vanilla_animation") && !ao.get("to_vanilla_animation").isJsonNull()) {
+                        action.toVanillaAnimation = ao.get("to_vanilla_animation").getAsString();
+                    }
+                    // 切回基岩（原版→基岩）的过渡关键帧动画
+                    if (ao.has("to_bedrock_animation") && !ao.get("to_bedrock_animation").isJsonNull()) {
+                        action.toBedrockAnimation = ao.get("to_bedrock_animation").getAsString();
+                    }
+                    actions.add(action);
+                }
+                config.keyActions.put(key, actions);
             }
         }
         // 默认忽略不渲染的骨骼组（按名称，含其子层级）
@@ -202,6 +207,8 @@ public final class AnimationIndex {
     /** 单个按键绑定动作。 */
     public static final class KeyAction {
         public int clicks = 1;
+        /** 配置里是否显式写了 clicks：未写 clicks 的动作视为“按住（hold）”触发。 */
+        public boolean hasClicks = false;
         public String animation;
         /** 为 true 时按下该键切换第一人称是否模拟原版手持（不播动画）。 */
         public boolean toggleFirstPerson = false;
@@ -237,6 +244,27 @@ public final class AnimationIndex {
         public String switchIn;
         public String switchOut;
         public final Map<String, List<KeyAction>> keyActions = new HashMap<>();
+
+        /**
+         * 判断某键是否为“按住”模式：鼠标键 lc/rc/mc 始终是点击；
+         * 键盘键当该键所有动作都没有显式 clicks 时视为按住（按下播动画、松开回默认）。
+         */
+        public boolean isHoldKey(String key) {
+            if (KeyNames.MOUSE_KEYS.contains(key)) {
+                return false;
+            }
+            List<KeyAction> actions = keyActions.get(key);
+            if (actions == null || actions.isEmpty()) {
+                return false;
+            }
+            for (KeyAction a : actions) {
+                if (a.hasClicks) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         public final Map<String, Boolean> interruptible = new HashMap<>();
         /** 默认忽略不渲染的骨骼组名称（含其子层级）。 */
         public final List<String> ignoredBones = new ArrayList<>();
