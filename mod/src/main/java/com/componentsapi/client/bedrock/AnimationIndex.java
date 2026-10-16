@@ -35,7 +35,9 @@ import java.util.Map;
  *     "lc": [{"clicks": 1, "animation": "swing"}, {"clicks": 2, "animation": "double_swing"}],
  *     "rc": [{"clicks": 1, "animation": "block"}],
  *     "mc": [],
- *     "h":  [{"animation": "inspect"}]
+ *     "h":  [{"animation": "inspect"}],
+ *     "fp":  [{"toggle_first_person": true, "block_animations": true,
+ *              "to_vanilla_animation": "fp_hide", "to_bedrock_animation": "fp_show"}]
  *   },
  *   "animations": {
  *     "idle": {"interruptible": true}
@@ -43,7 +45,9 @@ import java.util.Map;
  * }
  *
  * texture=模型 3D 贴图；slot_texture=物品栏 2D 图标（放 textures/item/ 下）
- * 按键：lc=左键, rc=右键, mc=中键, h=持续按键(inspect/检视)
+ * 按键：lc=左键, rc=右键, mc=中键, h=持续按键(inspect/检视), fp=第一人称模拟切换(默认 R 键)
+ * fp 切换：to_vanilla_animation 为基岩→原版退场关键帧，to_bedrock_animation 为原版→基岩进场关键帧；
+ *          未写则回退 switch.out / switch.in；过渡期间强制，不可被普通按键打断
  * clicks 多段：按点击次数依次播放，最后一段完成后再点回到第一段
  */
 public final class AnimationIndex {
@@ -128,6 +132,14 @@ public final class AnimationIndex {
                         if (ao.has("block_animations")) {
                             action.blockAnimations = ao.get("block_animations").getAsBoolean();
                         }
+                        // 切入模拟原版手持（基岩→原版）的过渡关键帧动画
+                        if (ao.has("to_vanilla_animation") && !ao.get("to_vanilla_animation").isJsonNull()) {
+                            action.toVanillaAnimation = ao.get("to_vanilla_animation").getAsString();
+                        }
+                        // 切回基岩（原版→基岩）的过渡关键帧动画
+                        if (ao.has("to_bedrock_animation") && !ao.get("to_bedrock_animation").isJsonNull()) {
+                            action.toBedrockAnimation = ao.get("to_bedrock_animation").getAsString();
+                        }
                         actions.add(action);
                     }
                     config.keyActions.put(key, actions);
@@ -195,6 +207,18 @@ public final class AnimationIndex {
         public boolean toggleFirstPerson = false;
         /** 开启原版模拟时是否压制其他按键动画（默认 true）。 */
         public boolean blockAnimations = true;
+        /**
+         * 切入模拟原版手持（基岩→原版）时的过渡关键帧动画名。
+         * 非 null 时先播放该动画（基岩模型退场），结束后才交原版渲染。
+         * null=回退到顶层 switch.out；仍无则瞬间切换。
+         */
+        public String toVanillaAnimation;
+        /**
+         * 切回基岩（原版→基岩）时的过渡关键帧动画名。
+         * 非 null 时先恢复基岩渲染并播放该动画（进场），结束后回到默认。
+         * null=回退到顶层 switch.in；仍无则瞬间切换。
+         */
+        public String toBedrockAnimation;
     }
 
     /** 模型完整配置。 */

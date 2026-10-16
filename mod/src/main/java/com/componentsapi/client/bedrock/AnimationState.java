@@ -39,6 +39,10 @@ public final class AnimationState {
     private boolean vanillaFpMode;
     /** 原版模拟状态下是否压制其他按键动画（默认 true）。 */
     private boolean fpBlockAnimations = true;
+    /** fp 切换过渡动画（非 null 时正在播放基岩↔原版的关键帧过渡）。 */
+    private ActiveAnimation fpTransition;
+    /** fp 过渡方向：true=基岩→原版（结束后交原版），false=原版→基岩（结束后回默认）。 */
+    private boolean fpTransitionToVanilla;
 
     public static AnimationState get() {
         return INSTANCE;
@@ -130,13 +134,39 @@ public final class AnimationState {
         }
         if (target == null) return;
 
+        // fp 切换过渡进行中：过渡是强制的，忽略所有按键（含再次 toggle）
+        if (fpTransition != null) {
+            return;
+        }
+
         // 切换第一人称是否模拟原版手持（即使在 force 播放中也允许，用于退出）
         if (target.toggleFirstPerson) {
-            vanillaFpMode = !vanillaFpMode;
             fpBlockAnimations = target.blockAnimations;
             if (!vanillaFpMode) {
-                // 关闭模拟，恢复基岩默认动画
-                startDefault(handModel);
+                // 基岩 → 原版：先播退场关键帧（基岩仍渲染），结束后再交原版
+                String outAnim = target.toVanillaAnimation != null
+                        ? target.toVanillaAnimation : cfg.switchOut;
+                ActiveAnimation t = outAnim != null ? build(handModel, outAnim, false) : null;
+                if (t != null) {
+                    fpTransition = t;
+                    fpTransitionToVanilla = true;
+                    current = t;
+                } else {
+                    vanillaFpMode = true; // 无过渡动画：瞬间切换
+                }
+            } else {
+                // 原版 → 基岩：立即恢复基岩渲染，再播进场关键帧
+                vanillaFpMode = false;
+                String inAnim = target.toBedrockAnimation != null
+                        ? target.toBedrockAnimation : cfg.switchIn;
+                ActiveAnimation t = inAnim != null ? build(handModel, inAnim, false) : null;
+                if (t != null) {
+                    fpTransition = t;
+                    fpTransitionToVanilla = false;
+                    current = t;
+                } else {
+                    startDefault(handModel); // 无过渡动画：瞬间回默认
+                }
             }
             return;
         }
@@ -165,6 +195,9 @@ public final class AnimationState {
         if (cfg == null) return;
         List<KeyAction> actions = cfg.keyActions.get("h");
         if (actions == null || actions.isEmpty()) return;
+
+        // fp 过渡进行中：检视按键不参与（held 与松开都不打断过渡）
+        if (fpTransition != null) return;
 
         if (held) {
             KeyAction a = actions.get(0);
@@ -243,11 +276,24 @@ public final class AnimationState {
                         startDefault(handModel);
                     }
                 } else if (current == anim) {
-                    // 按键动画结束后回到默认
-                    if (handModel != null) {
-                        startDefault(handModel);
+                    if (anim == fpTransition) {
+                        // fp 切换过渡结束
+                        fpTransition = null;
+                        if (fpTransitionToVanilla) {
+                            // 基岩→原版退场结束：交原版手持渲染
+                            vanillaFpMode = true;
+                            current = null;
+                        } else {
+                            // 原版→基岩进场结束：回基岩默认
+                            startDefault(handModel);
+                        }
                     } else {
-                        current = null;
+                        // 普通按键动画结束后回到默认
+                        if (handModel != null) {
+                            startDefault(handModel);
+                        } else {
+                            current = null;
+                        }
                     }
                 }
                 return null;
@@ -316,6 +362,8 @@ public final class AnimationState {
         holdingH = false;
         vanillaFpMode = false;
         fpBlockAnimations = true;
+        fpTransition = null;
+        fpTransitionToVanilla = false;
     }
 
     private static int keyToIndex(String key) {

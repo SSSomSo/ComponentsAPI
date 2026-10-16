@@ -4,8 +4,8 @@
 
 - 作者：**Mc_SomSo**
 - 许可证：**CC BY-SA 4.0**
-- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.7.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
-- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.7.0.jar`
+- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.8.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
+- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.8.0.jar`
 
 > **职责边界**：ComponentsAPI 只提供**通用能力**（数据组件 + 渲染管线）；具体的自定义物品/方块/伤害类型等内容全部定义在 **SSCustomItems**（SSCI）中。
 
@@ -123,7 +123,8 @@ textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
     "rc": [ { "clicks": 1, "animation": "block" } ],
     "mc": [],
     "h":  [ { "animation": "inspect" } ],
-    "fp": [ { "toggle_first_person": true, "block_animations": true } ]
+    "fp": [ { "toggle_first_person": true, "block_animations": true,
+              "to_vanilla_animation": "fp_hide", "to_bedrock_animation": "fp_show" } ]
   },
   "animations": {
     "idle":    { "interruptible": true },
@@ -140,6 +141,7 @@ textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
 - `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `h` 持续按住（检视）/ `fp` 第一人称切换（默认 **R 键**）；`clicks` 支持多段循环，最后一段播完再点回到第一段。
   - `fp` 的动作用 `toggle_first_person:true` 标记：按下后切换第一人称是否**模拟原版手持**（开启后第一人称交回原版渲染，模型/贴图仍在）；
   - `block_animations`（默认 `true`）：开启原版模拟时**压制其他按键动画**（此时按 lc/rc/mc/h 不会出现对应动画，再按一次 fp 关闭后恢复）；设为 `false` 则不冲突。
+  - `to_vanilla_animation` / `to_bedrock_animation`：切换时播放的**关键帧过渡动画**——切入模拟（基岩→原版）时先播 `to_vanilla_animation`（基岩模型退场，动画结束后才交原版手持渲染）；切回（原版→基岩）时先恢复基岩渲染并播 `to_bedrock_animation`（进场）。不写则回退 `switch.out` / `switch.in`，都没有则瞬间切换。过渡期间强制，普通按键（lc/rc/mc/h 及再次按 fp）都不能打断，只有切换物品、丢弃、死亡可打断。
 - 动画名可写短名（`idle`）或全名（`animation.example.idle`），客户端会自动模糊匹配。
 - **强制播放**：在 `animations.<名>` 写 `"force": true`（兼容 `force_play`），该动画播放过程中普通按键（lc/rc/mc/h）无法打断；循环动画在停播前一直不可打断，非循环动画**播放结束后**才可打断。切换物品、丢弃物品、死亡仍可打断（它们直接重置手持模型）。
 - **未配置任何动作时，基岩物品不播放任何原版挥动/拉弓/格挡**（第一人称整段被替换）。
@@ -247,7 +249,7 @@ assets/capi/textures/block/<name>.png
 mvn -f plugin/pom.xml clean package
 ```
 
-产物：`plugin/target/ComponentsAPI-1.7.0.jar`。
+产物：`plugin/target/ComponentsAPI-1.8.0.jar`。
 
 资源包的权威源是 `mod/src/main/resources/assets/`；改完资源跑 `sync-pack.ps1`，会同步到
 `resourcepack/` 并重新生成 `plugin/pack/capi-pack.zip`（zip 根目录必须直接是 `pack.mcmeta`，
@@ -260,7 +262,7 @@ cd mod
 gradlew build
 ```
 
-产物：`mod/build/libs/ComponentsAPI-mod-1.7.0.jar`（official 命名在 libs）。
+产物：`mod/build/libs/ComponentsAPI-mod-1.8.0.jar`（official 命名在 libs）。
 
 Minecraft 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 中没有 client_mappings），
 工程在 `gradle.properties` 中设置 `fabric.loom.disableObfuscation=true`，

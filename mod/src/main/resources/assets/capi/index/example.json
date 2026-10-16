@@ -23,6 +23,14 @@
     "mc": [],
     "h": [
       { "animation": "inspect" }
+    ],
+    "fp": [
+      {
+        "toggle_first_person": true,
+        "block_animations": true,
+        "to_vanilla_animation": "fp_to_vanilla",
+        "to_bedrock_animation": "fp_to_bedrock"
+      }
     ]
   },
   "animations": {

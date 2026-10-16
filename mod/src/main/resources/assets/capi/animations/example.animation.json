@@ -76,6 +76,38 @@
           }
         }
       }
+    },
+    "animation.example.fp_to_vanilla": {
+      "loop": false,
+      "animation_length": 0.3,
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "0.3": [0, -3, 0]
+          },
+          "scale": {
+            "0.0": [1, 1, 1],
+            "0.3": [0.2, 0.2, 0.2]
+          }
+        }
+      }
+    },
+    "animation.example.fp_to_bedrock": {
+      "loop": false,
+      "animation_length": 0.3,
+      "bones": {
+        "root": {
+          "position": {
+            "0.0": [0, -3, 0],
+            "0.3": [0, 0, 0]
+          },
+          "scale": {
+            "0.0": [0.2, 0.2, 0.2],
+            "0.3": [1, 1, 1]
+          }
+        }
+      }
     }
   }
 }
