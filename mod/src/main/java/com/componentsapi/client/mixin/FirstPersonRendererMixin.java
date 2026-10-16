@@ -39,6 +39,12 @@ public abstract class FirstPersonRendererMixin {
             // 更新动画状态（仅主手控制模型，副手单独渲染）
             if (hand == InteractionHand.MAIN_HAND) {
                 AnimationState.get().setHandModel(modelKey);
+                // 每帧驱动声音/粒子关键帧
+                AnimationState.get().tickEffects();
+                // 第一人称切换为模拟原版手持时：不 cancel，交由原版渲染
+                if (AnimationState.get().isVanillaFpMode()) {
+                    return;
+                }
             }
             // 用基岩渲染器渲染，取消原版
             BedrockItemRenderer.renderFirstPerson(modelKey, matrices, collector, light);

@@ -1,0 +1,24 @@
+{
+  "draw": {
+    "category": "player",
+    "subtitle": "capi.subtitle.draw",
+    "sounds": [
+      {
+        "name": "minecraft:entity/experience_orb/pickup1",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "swing": {
+    "category": "player",
+    "subtitle": "capi.subtitle.swing",
+    "sounds": [
+      {
+        "name": "minecraft:entity/player/attack/attack1",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  }
+}

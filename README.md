@@ -4,8 +4,8 @@
 
 - 作者：**Mc_SomSo**
 - 许可证：**CC BY-SA 4.0**
-- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.5.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
-- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.5.0.jar`
+- 服务端：Paper 26.2（Java 25），插件 `ComponentsAPI-1.7.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
+- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.7.0.jar`
 
 > **职责边界**：ComponentsAPI 只提供**通用能力**（数据组件 + 渲染管线）；具体的自定义物品/方块/伤害类型等内容全部定义在 **SSCustomItems**（SSCI）中。
 
@@ -114,27 +114,49 @@ textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
   "default_animation": "idle",
   "texture": "capi:textures/geo_models/example.png",
   "slot_texture": "capi:textures/item/example.png",
+  "enchantment_glint": false,
+  "ignored_bones": ["cape", "tail"],
   "first_person_offset": { "enabled": true, "x": 0.56, "y": -0.52, "z": 0.72 },
   "switch": { "in": "equip_in", "out": "equip_out" },
   "keys": {
     "lc": [ { "clicks": 1, "animation": "swing" } ],
     "rc": [ { "clicks": 1, "animation": "block" } ],
     "mc": [],
-    "h":  [ { "animation": "inspect" } ]
+    "h":  [ { "animation": "inspect" } ],
+    "fp": [ { "toggle_first_person": true, "block_animations": true } ]
   },
   "animations": {
     "idle":    { "interruptible": true },
-    "inspect": { "interruptible": false }
+    "inspect": { "interruptible": false, "force": true }
   }
 }
 ```
 
 - `texture`：3D 模型贴图（可省略，用默认 `textures/geo_models/<名字>.png`）；`slot_texture`：物品栏图标（可省略，省略则显示原版物品图标）。
+- `enchantment_glint`：是否允许基岩物品显示附魔光效，**默认 `false`（关闭以节省资源）**；开启后只保留原版 `item_model` 路径（掉落物、展示框）的光效，基岩模型自身叠加的光效层暂未实现。
+- `ignored_bones`：按**骨骼组名称**列出的组默认不渲染（含其全部子层级 cubes）；基岩模型同名组在单文件内唯一，直接填组名即可。
 - `first_person_offset`：第一人称默认向右/下/前偏移，模拟原版手持，可整体关闭。
 - `switch.in/out`：切入/切出动画（覆盖原版切换动画）。
-- `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `h` 持续按住（检视）；`clicks` 支持多段循环，最后一段播完再点回到第一段。
+- `keys`：`lc` 左键 / `rc` 右键 / `mc` 中键 / `h` 持续按住（检视）/ `fp` 第一人称切换（默认 **R 键**）；`clicks` 支持多段循环，最后一段播完再点回到第一段。
+  - `fp` 的动作用 `toggle_first_person:true` 标记：按下后切换第一人称是否**模拟原版手持**（开启后第一人称交回原版渲染，模型/贴图仍在）；
+  - `block_animations`（默认 `true`）：开启原版模拟时**压制其他按键动画**（此时按 lc/rc/mc/h 不会出现对应动画，再按一次 fp 关闭后恢复）；设为 `false` 则不冲突。
 - 动画名可写短名（`idle`）或全名（`animation.example.idle`），客户端会自动模糊匹配。
+- **强制播放**：在 `animations.<名>` 写 `"force": true`（兼容 `force_play`），该动画播放过程中普通按键（lc/rc/mc/h）无法打断；循环动画在停播前一直不可打断，非循环动画**播放结束后**才可打断。切换物品、丢弃物品、死亡仍可打断（它们直接重置手持模型）。
 - **未配置任何动作时，基岩物品不播放任何原版挥动/拉弓/格挡**（第一人称整段被替换）。
+
+### 动画音效（走原版 sounds 体系）
+
+动画 `sound_effects` 的 `effect` 写原版音效事件 id，可直接写原版事件（如 `minecraft:entity.experience_orb.pickup`），
+也可自定义命名空间事件（如 `capi:draw`）。自定义事件的音频位置与原版完全一致：
+
+```
+assets/<命名空间>/sounds.json     # 声明音效事件 → ogg 文件映射（同原版 sounds.json）
+assets/<命名空间>/sounds/<x>.ogg  # 音频文件
+```
+
+因此既能在动画中自动播放，也能手动用 `/playsound <命名空间>:<事件> player @a` 播放。
+示例资源包注册了 `capi:draw`、`capi:swing`（默认复用原版音频文件，可替换为自己的 ogg）。
+声音支持 `volume`、`pitch`（固定值或 `[min,max]` 随机区间）。
 
 ### 手臂定位组
 
@@ -142,6 +164,8 @@ textures/item/<名字>.png            # 物品栏 2D 图标（16×16，可选）
 
 - `lefthand_pos`：左手，尺寸 x4 × y12 × z4
 - `righthand_pos`：右手
+
+**第三人称手持跟随**：其他玩家/生物手持基岩物品时，模型会跟随手臂摆动（走路摆臂、挥动、拉弓/格挡持物姿势、举到眼前等），并通过手部锚点 FK 让定位组（`righthand_pos`/`lefthand_pos`）在动画中带动手臂。第三人称的旋转补偿与缩放目前为经验值（集中在 `BedrockItemRenderer`），若朝向/位置不对可在此微调。
 
 ### 命令播放动画（服务端发起）
 
@@ -223,7 +247,7 @@ assets/capi/textures/block/<name>.png
 mvn -f plugin/pom.xml clean package
 ```
 
-产物：`plugin/target/ComponentsAPI-1.5.0.jar`。
+产物：`plugin/target/ComponentsAPI-1.7.0.jar`。
 
 资源包的权威源是 `mod/src/main/resources/assets/`；改完资源跑 `sync-pack.ps1`，会同步到
 `resourcepack/` 并重新生成 `plugin/pack/capi-pack.zip`（zip 根目录必须直接是 `pack.mcmeta`，
@@ -236,7 +260,7 @@ cd mod
 gradlew build
 ```
 
-产物：`mod/build/libs/ComponentsAPI-mod-1.5.0.jar`（official 命名在 libs）。
+产物：`mod/build/libs/ComponentsAPI-mod-1.7.0.jar`（official 命名在 libs）。
 
 Minecraft 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 中没有 client_mappings），
 工程在 `gradle.properties` 中设置 `fabric.loom.disableObfuscation=true`，

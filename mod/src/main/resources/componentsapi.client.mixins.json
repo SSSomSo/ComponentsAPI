@@ -8,7 +8,9 @@
     "ItemInHandLayerMixin",
     "PlayerItemInHandLayerMixin",
     "GuiItemMixin",
-    "ModelBlockRendererMixin"
+    "ModelBlockRendererMixin",
+    "ItemModelResolverMixin",
+    "ItemStackRenderStateAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

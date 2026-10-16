@@ -10,35 +10,35 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * 第三人称手持物品：玩家层（按 F5 看到的自己/其他玩家）。
- * 玩家层覆盖了 submitArmWithItem，因此需要单独注入。
+ * 玩家手持层兜底：处理"把物品举到眼前"路径（望远镜等使用中物品，
+ * PlayerItemInHandLayer.renderItemHeldToEye 内的独立 submit）。
+ * 常规手持走 super.submitArmWithItem，已由 ItemInHandLayerMixin 重定向覆盖。
  */
 @Mixin(PlayerItemInHandLayer.class)
-public abstract class PlayerItemInHandLayerMixin {
+public class PlayerItemInHandLayerMixin {
 
-    @Inject(
-            method = "submitArmWithItem",
-            at = @At("HEAD"),
-            cancellable = true,
+    @Redirect(
+            method = "renderItemHeldToEye",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"),
             require = 0)
-    private void capi$renderBedrockHeldPlayer(AvatarRenderState state,
-                                              ItemStackRenderState itemState,
-                                              ItemStack stack,
-                                              HumanoidArm arm,
-                                              PoseStack matrices,
-                                              SubmitNodeCollector collector,
-                                              int light,
-                                              CallbackInfo ci) {
+    private void capi$redirectHeldToEyeSubmit(
+            ItemStackRenderState rs, PoseStack ps, SubmitNodeCollector collector,
+            int light, int overlay, int outline,
+            AvatarRenderState state, HumanoidArm arm,
+            PoseStack matrices, SubmitNodeCollector collectorOuter, int lightOuter) {
+        ItemStack stack = arm == HumanoidArm.RIGHT
+                ? state.rightHandItemStack
+                : state.leftHandItemStack;
         String model = BedrockItemRenderer.modelOf(stack);
         if (model != null) {
-            // AvatarRenderState 不直接持有 mainArm，主副手由调用顺序决定，这里默认按手臂渲染即可
-            boolean mainHand = arm == HumanoidArm.RIGHT;
-            BedrockItemRenderer.renderThirdPerson(model, matrices, collector, light, mainHand);
-            ci.cancel();
+            BedrockItemRenderer.renderThirdPerson(model, ps, collector, light,
+                    arm == HumanoidArm.RIGHT, state.ageInTicks);
+        } else {
+            rs.submit(ps, collector, light, overlay, outline);
         }
     }
 }

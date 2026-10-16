@@ -6,7 +6,7 @@
       "animation_length": 2.0,
       "sound_effects": {
         "1.0": {
-          "effect": "minecraft:entity.experience_orb.pickup",
+          "effect": "capi:draw",
           "volume": 0.4,
           "pitch": 1.2
         }

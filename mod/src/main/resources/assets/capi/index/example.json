@@ -2,6 +2,7 @@
   "default_animation": "idle",
   "texture": "capi:textures/geo_models/example.png",
   "slot_texture": "capi:textures/item/example.png",
+  "enchantment_glint": false,
   "first_person_offset": {
     "enabled": true,
     "x": 0.56,

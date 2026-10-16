@@ -35,6 +35,10 @@ public final class AnimationState {
     private final int[] clickCounts = new int[256];
     /** h 键是否按住。 */
     private boolean holdingH;
+    /** 第一人称是否模拟原版手持（toggle，按键切换）。 */
+    private boolean vanillaFpMode;
+    /** 原版模拟状态下是否压制其他按键动画（默认 true）。 */
+    private boolean fpBlockAnimations = true;
 
     public static AnimationState get() {
         return INSTANCE;
@@ -100,7 +104,7 @@ public final class AnimationState {
         }
     }
 
-    /** 按键点击（lc/rc/mc）。 */
+    /** 按键点击（lc/rc/mc/fp）。 */
     public void onClick(String key) {
         if (handModel == null) return;
         ModelConfig cfg = AnimationIndex.get().get(handModel);
@@ -124,7 +128,28 @@ public final class AnimationState {
         if (target == null) {
             target = actions.get(clickCounts[idx] - 1);
         }
-        if (target != null && target.animation != null) {
+        if (target == null) return;
+
+        // 切换第一人称是否模拟原版手持（即使在 force 播放中也允许，用于退出）
+        if (target.toggleFirstPerson) {
+            vanillaFpMode = !vanillaFpMode;
+            fpBlockAnimations = target.blockAnimations;
+            if (!vanillaFpMode) {
+                // 关闭模拟，恢复基岩默认动画
+                startDefault(handModel);
+            }
+            return;
+        }
+
+        // 处于原版模拟且压制其他动画时，忽略其他按键效果
+        if (vanillaFpMode && fpBlockAnimations) {
+            return;
+        }
+        // 当前动画强制播放中，普通按键无法打断
+        if (!canInterruptCurrent()) {
+            return;
+        }
+        if (target.animation != null) {
             ActiveAnimation anim = build(handModel, target.animation, true);
             if (anim != null) {
                 current = anim;
@@ -143,6 +168,9 @@ public final class AnimationState {
 
         if (held) {
             KeyAction a = actions.get(0);
+            // 原版模拟压制 / 强制播放阻断
+            if (vanillaFpMode && fpBlockAnimations) return;
+            if (!canInterruptCurrent()) return;
             if (a.animation != null) {
                 current = build(handModel, a.animation, true);
             }
@@ -150,6 +178,19 @@ public final class AnimationState {
             // 松开后回到默认
             startDefault(handModel);
         }
+    }
+
+    /** 当前动画是否可被普通按键打断（force 强制播放且未结束时不可）。 */
+    private boolean canInterruptCurrent() {
+        ActiveAnimation a = current;
+        if (a == null) return true;
+        if (!AnimationIndex.get().isForcePlay(a.modelKey, a.animName)) {
+            return true;
+        }
+        // 强制动画：循环动画在停播前不可打断；非循环动画播放结束后可打断
+        if (a.loop) return false;
+        float elapsed = (System.currentTimeMillis() - a.startMs) / 1000f;
+        return elapsed >= a.animation.length;
     }
 
     /** 服务端 /pba 强制播放。 */
@@ -225,6 +266,43 @@ public final class AnimationState {
         return current != null || switchOutPending != null;
     }
 
+    private float lastEffectTime = -1f;
+    private ActiveAnimation lastEffectAnim;
+
+    /**
+     * 每帧（第一人称主手渲染时）调用：检测当前动画跨越的声音/粒子关键帧并播放。
+     * 声音走原版 sounds 注册体系（可被 /playsound 识别）。
+     */
+    public void tickEffects() {
+        ActiveAnimation anim = current != null ? current : switchOutPending;
+        if (anim == null) {
+            lastEffectTime = -1f;
+            lastEffectAnim = null;
+            return;
+        }
+        float elapsed = (System.currentTimeMillis() - anim.startMs) / 1000f;
+        float animTime = anim.loop
+                ? elapsed % anim.animation.length
+                : Math.min(elapsed, anim.animation.length);
+        if (lastEffectAnim == anim && lastEffectTime >= 0f) {
+            float from = lastEffectTime;
+            float to = animTime;
+            if (anim.loop && to < from) {
+                // 循环回绕：分两段触发
+                BedrockItemEffects.fireRange(anim.animation, from, anim.animation.length);
+                BedrockItemEffects.fireRange(anim.animation, 0f, to);
+            } else if (to > from) {
+                BedrockItemEffects.fireRange(anim.animation, from, to);
+            }
+        }
+        lastEffectAnim = anim;
+        lastEffectTime = animTime;
+    }
+
+    public boolean isVanillaFpMode() {
+        return vanillaFpMode;
+    }
+
     public String getHandModel() {
         return handModel;
     }
@@ -236,6 +314,8 @@ public final class AnimationState {
     private void resetClicks() {
         java.util.Arrays.fill(clickCounts, 0);
         holdingH = false;
+        vanillaFpMode = false;
+        fpBlockAnimations = true;
     }
 
     private static int keyToIndex(String key) {
@@ -243,6 +323,7 @@ public final class AnimationState {
             case "lc" -> 0;
             case "rc" -> 1;
             case "mc" -> 2;
+            case "fp" -> 4;
             default -> 3;
         };
     }

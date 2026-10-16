@@ -91,6 +91,10 @@ public final class AnimationIndex {
         if (root.has("slot_texture") && !root.get("slot_texture").isJsonNull()) {
             config.slotTexture = root.get("slot_texture").getAsString();
         }
+        // 附魔光效开关：默认 false（关闭以节省资源）；index 显式 enchantment_glint:true 才开启
+        if (root.has("enchantment_glint") && !root.get("enchantment_glint").isJsonNull()) {
+            config.enchantmentGlint = root.get("enchantment_glint").getAsBoolean();
+        }
         // 第一人称偏移
         if (root.has("first_person_offset")) {
             JsonObject off = root.getAsJsonObject("first_person_offset");
@@ -108,21 +112,35 @@ public final class AnimationIndex {
         // 按键绑定
         if (root.has("keys")) {
             JsonObject keys = root.getAsJsonObject("keys");
-            for (String key : new String[]{"lc", "rc", "mc", "h"}) {
+            for (String key : new String[]{"lc", "rc", "mc", "h", "fp"}) {
                 if (keys.has(key)) {
                     List<KeyAction> actions = new ArrayList<>();
                     for (JsonElement el : keys.getAsJsonArray(key)) {
                         JsonObject ao = el.getAsJsonObject();
                         KeyAction action = new KeyAction();
                         if (ao.has("clicks")) action.clicks = ao.get("clicks").getAsInt();
-                        action.animation = ao.get("animation").getAsString();
+                        if (ao.has("animation")) action.animation = ao.get("animation").getAsString();
+                        // 切换第一人称模拟原版手持（toggle）
+                        if (ao.has("toggle_first_person")) {
+                            action.toggleFirstPerson = ao.get("toggle_first_person").getAsBoolean();
+                        }
+                        // 开启原版模拟时是否压制其他按键动画（默认 true，冲突）
+                        if (ao.has("block_animations")) {
+                            action.blockAnimations = ao.get("block_animations").getAsBoolean();
+                        }
                         actions.add(action);
                     }
                     config.keyActions.put(key, actions);
                 }
             }
         }
-        // 动画可打断性
+        // 默认忽略不渲染的骨骼组（按名称，含其子层级）
+        if (root.has("ignored_bones") && root.get("ignored_bones").isJsonArray()) {
+            for (JsonElement el : root.getAsJsonArray("ignored_bones")) {
+                config.ignoredBones.add(el.getAsString());
+            }
+        }
+        // 动画可打断性 / 强制播放
         if (root.has("animations")) {
             JsonObject anims = root.getAsJsonObject("animations");
             for (String name : anims.keySet()) {
@@ -132,6 +150,12 @@ public final class AnimationIndex {
                     interruptible = animObj.get("interruptible").getAsBoolean();
                 }
                 config.interruptible.put(name, interruptible);
+                boolean force = false;
+                if (animObj.has("force") || animObj.has("force_play")) {
+                    JsonObject o2 = animObj;
+                    force = (o2.has("force") ? o2.get("force") : o2.get("force_play")).getAsBoolean();
+                }
+                config.forcePlay.put(name, force);
             }
         }
         return config;
@@ -151,10 +175,26 @@ public final class AnimationIndex {
         return c == null || c.interruptible.getOrDefault(animName, true);
     }
 
+    /** 该骨骼是否被配置为忽略不渲染。 */
+    public boolean isIgnoredBone(String modelKey, String boneName) {
+        ModelConfig c = configs.get(modelKey);
+        return c != null && c.ignoredBones.contains(boneName);
+    }
+
+    /** 该动画是否强制播放（普通操作不可打断）。 */
+    public boolean isForcePlay(String modelKey, String animName) {
+        ModelConfig c = configs.get(modelKey);
+        return c != null && c.forcePlay.getOrDefault(animName, false);
+    }
+
     /** 单个按键绑定动作。 */
     public static final class KeyAction {
         public int clicks = 1;
         public String animation;
+        /** 为 true 时按下该键切换第一人称是否模拟原版手持（不播动画）。 */
+        public boolean toggleFirstPerson = false;
+        /** 开启原版模拟时是否压制其他按键动画（默认 true）。 */
+        public boolean blockAnimations = true;
     }
 
     /** 模型完整配置。 */
@@ -164,6 +204,8 @@ public final class AnimationIndex {
         public String modelTexture;
         /** 物品栏 2D 图标贴图，形如 capi:textures/item/example.png；null=不替换。 */
         public String slotTexture;
+        /** 是否允许附魔光效（默认 false 关闭以节省资源）；index 显式 enchantment_glint:true 才开启。 */
+        public boolean enchantmentGlint = false;
         public boolean fpEnabled = true;
         public float fpX = 0.56f;   // 右（模拟原版第一人称手持偏移）
         public float fpY = -0.52f; // 下
@@ -172,6 +214,10 @@ public final class AnimationIndex {
         public String switchOut;
         public final Map<String, List<KeyAction>> keyActions = new HashMap<>();
         public final Map<String, Boolean> interruptible = new HashMap<>();
+        /** 默认忽略不渲染的骨骼组名称（含其子层级）。 */
+        public final List<String> ignoredBones = new ArrayList<>();
+        /** 标记为强制播放的动画名。 */
+        public final Map<String, Boolean> forcePlay = new HashMap<>();
     }
 
     private AnimationIndex() {}

@@ -14,7 +14,7 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class KeyBindHandler {
 
-    private static boolean prevLc, prevRc, prevMc, prevH;
+    private static boolean prevLc, prevRc, prevMc, prevH, prevFp;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(KeyBindHandler::onTick);
@@ -32,6 +32,8 @@ public final class KeyBindHandler {
         boolean rc = mc.options.keyUse.isDown();
         boolean mcDown = mc.options.keyPickItem.isDown();
         boolean h = isHeld(mc, GLFW.GLFW_KEY_H);
+        // fp：第一人称模拟切换（默认 R 键，仅在 index keys.fp 配置时生效）
+        boolean fp = isHeld(mc, GLFW.GLFW_KEY_R);
 
         if (lc && !prevLc) {
             AnimationState.get().onClick("lc");
@@ -45,8 +47,11 @@ public final class KeyBindHandler {
         if (h != prevH) {
             AnimationState.get().setHoldH(h);
         }
+        if (fp && !prevFp) {
+            AnimationState.get().onClick("fp");
+        }
         // 无基岩物品时清空手持模型
-        if (!lc && !rc && !mcDown && !h) {
+        if (!lc && !rc && !mcDown && !h && !fp) {
             String model = BedrockItemRenderer.modelOf(mc.player.getMainHandItem());
             if (model == null) {
                 AnimationState.get().setHandModel(null);
@@ -57,6 +62,7 @@ public final class KeyBindHandler {
         prevRc = rc;
         prevMc = mcDown;
         prevH = h;
+        prevFp = fp;
     }
 
     private KeyBindHandler() {}
