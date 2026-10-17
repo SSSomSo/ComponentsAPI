@@ -12,7 +12,8 @@ import com.componentsapi.client.payload.SyncPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.minecraft.server.packs.resources.ReloadableResourceManager;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.minecraft.server.packs.PackType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,10 +46,10 @@ public final class ComponentsApiClient implements ClientModInitializer {
         // 按键绑定（lc/rc/mc 及 index 中声明的任意键盘键）
         KeyBindHandler.register();
 
-        ReloadableResourceManager resourceManager =
-                (ReloadableResourceManager) (Object)
-                        net.minecraft.client.Minecraft.getInstance().getResourceManager();
-        resourceManager.registerReloadListener(new BedrockReloadListener());
+        // 用 Fabric ResourceManagerHelper 注册，避免在 onInitializeClient 阶段
+        // Minecraft.getInstance().getResourceManager() 仍为 null 导致 NPE（26.2 构造时序）。
+        ResourceManagerHelper.get(PackType.CLIENT_RESOURCES)
+                .registerReloadListener(new BedrockReloadListener());
 
         // 资源包加密配置：读取/生成密钥，扫描 config/capi/rp 下的 zip 加密为 .dat
         CapiConfig config = new CapiConfig();

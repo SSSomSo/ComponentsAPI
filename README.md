@@ -4,8 +4,8 @@
 
 - 作者：**Mc_SomSo**
 - 许可证：**CC BY-SA 4.0**
-- 服务端：Paper 26.2（Java 25，**已适配 build 134 的新序列化体系**，同时兼容 build 12x），插件 `ComponentsAPI-1.10.0.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
-- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.10.0.jar`
+- 服务端：Paper 26.2（Java 25，**已适配 build 134 的新序列化体系**，同时兼容 build 12x），插件 `ComponentsAPI-1.10.1.jar`（**强依赖 SSCustomItems**，缺失时不会启动）
+- 客户端：Fabric（Minecraft 26.2，Fabric API 0.161.0+26.2），模组 `ComponentsAPI-mod-1.10.1.jar`（1.10.1 修复了 onInitializeClient 阶段 resourceManager 为 null 导致的启动崩溃）
 
 > **职责边界**：ComponentsAPI 只提供**通用能力**（数据组件 + 渲染管线）；具体的自定义物品/方块/伤害类型等内容全部定义在 **SSCustomItems**（SSCI）中。
 
@@ -275,7 +275,7 @@ assets/capi/textures/block/<name>.png
 mvn -f plugin/pom.xml clean package
 ```
 
-产物：`plugin/target/ComponentsAPI-1.10.0.jar`。
+产物：`plugin/target/ComponentsAPI-1.10.1.jar`。
 
 资源包的权威源是 `mod/src/main/resources/assets/`；改完资源跑 `sync-pack.ps1`，会同步到
 `resourcepack/` 并重新生成 `plugin/pack/capi-pack.zip`（zip 根目录必须直接是 `pack.mcmeta`，
@@ -288,7 +288,7 @@ cd mod
 gradlew build
 ```
 
-产物：`mod/build/libs/ComponentsAPI-mod-1.10.0.jar`（official 命名在 libs）。
+产物：`mod/build/libs/ComponentsAPI-mod-1.10.1.jar`（official 命名在 libs）。
 
 Minecraft 26.2 起 Mojang 发行 jar 本身即为官方命名（版本 JSON 中没有 client_mappings），
 工程在 `gradle.properties` 中设置 `fabric.loom.disableObfuscation=true`，
