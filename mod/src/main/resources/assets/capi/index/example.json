@@ -10,8 +10,13 @@
     "z": 0.72
   },
   "switch": {
-    "in": "equip_in",
+    "in": ["equip_in_a", "equip_in_b", "none"],
     "out": "equip_out"
+  },
+  "sprint": {
+    "start": "sprint_start",
+    "sprinting": "sprint_loop",
+    "end": "sprint_end"
   },
   "keys": {
     "lc": [
@@ -37,11 +42,16 @@
     "idle": { "interruptible": true },
     "walk": { "interruptible": true },
     "swing": { "interruptible": true },
-    "block": { "interruptible": false },
-    "inspect": { "interruptible": false },
-    "equip_in": { "interruptible": false },
+    "block": { "interruptible": false, "force_play": true },
+    "inspect": { "interruptible": false, "force_play": true },
+    "equip_in_a": { "interruptible": false },
+    "equip_in_b": { "interruptible": false },
     "equip_out": { "interruptible": false },
     "fp_to_vanilla": { "interruptible": false },
-    "fp_to_bedrock": { "interruptible": false }
-  }
+    "fp_to_bedrock": { "interruptible": false },
+    "sprint_start": { "interruptible": false },
+    "sprint_loop": { "interruptible": true },
+    "sprint_end": { "interruptible": false }
+  },
+  "_comment": "switch.in 为数组时切入随机选一个（含 none 表示不播切入）；sprint 三段：start(非循环)→sprinting(循环)→end(非循环)；force_play:true 的动画播放期间禁止攻击/使用物品"
 }

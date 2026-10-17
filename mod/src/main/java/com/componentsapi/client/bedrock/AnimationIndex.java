@@ -84,9 +84,8 @@ public final class AnimationIndex {
 
     private ModelConfig parse(JsonObject root) {
         ModelConfig config = new ModelConfig();
-        if (root.has("default_animation")) {
-            config.defaultAnimation = root.get("default_animation").getAsString();
-        }
+        // 默认动画：支持字符串或数组（随机）
+        config.defaultAnimations = parseAnimList(root, "default_animation");
         // 模型 3D 贴图（可含命名空间）
         if (root.has("texture") && !root.get("texture").isJsonNull()) {
             config.modelTexture = root.get("texture").getAsString();
@@ -107,11 +106,18 @@ public final class AnimationIndex {
             if (off.has("y")) config.fpY = off.get("y").getAsFloat();
             if (off.has("z")) config.fpZ = off.get("z").getAsFloat();
         }
-        // 切换动画
+        // 切换动画：支持字符串或数组（随机）；"none" 表示不播
         if (root.has("switch")) {
             JsonObject sw = root.getAsJsonObject("switch");
-            if (sw.has("in")) config.switchIn = sw.get("in").getAsString();
-            if (sw.has("out")) config.switchOut = sw.get("out").getAsString();
+            config.switchIn = parseAnimList(sw, "in");
+            config.switchOut = parseAnimList(sw, "out");
+        }
+        // 跑步动作：sprint.start / sprint.sprinting / sprint.end
+        if (root.has("sprint")) {
+            JsonObject sp = root.getAsJsonObject("sprint");
+            config.sprintStart = parseAnimList(sp, "start");
+            config.sprinting = parseAnimList(sp, "sprinting");
+            config.sprintEnd = parseAnimList(sp, "end");
         }
         // 按键绑定：keys 下允许任意键名（鼠标 lc/rc/mc、fp 别名及 KeyNames 支持的全部键盘键）
         if (root.has("keys")) {
@@ -184,7 +190,36 @@ public final class AnimationIndex {
 
     public String defaultAnimation(String modelKey) {
         ModelConfig c = configs.get(modelKey);
-        return c != null ? c.defaultAnimation : null;
+        return c != null ? pickRandom(c.defaultAnimations) : null;
+    }
+
+    /**
+     * 从动画选项列表中随机选一个。
+     * 列表为 null/空返回 null；选项为 "none"（不区分大小写）返回 null（表示不播动画）。
+     */
+    public static String pickRandom(List<String> options) {
+        if (options == null || options.isEmpty()) return null;
+        String picked = options.get((int) (Math.random() * options.size()));
+        if (picked == null || "none".equalsIgnoreCase(picked)) return null;
+        return picked;
+    }
+
+    /**
+     * 解析 JSON 中的动画字段：支持字符串（单动画）或数组（随机列表）。
+     * 字段不存在/null 返回 null；数组为空返回 null。
+     */
+    private static List<String> parseAnimList(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return null;
+        List<String> list = new ArrayList<>();
+        JsonElement el = obj.get(key);
+        if (el.isJsonArray()) {
+            for (JsonElement e : el.getAsJsonArray()) {
+                if (!e.isJsonNull()) list.add(e.getAsString());
+            }
+        } else {
+            list.add(el.getAsString());
+        }
+        return list.isEmpty() ? null : list;
     }
 
     public boolean isInterruptible(String modelKey, String animName) {
@@ -228,9 +263,15 @@ public final class AnimationIndex {
         public String toBedrockAnimation;
     }
 
-    /** 模型完整配置。 */
+    /** 模型完整配置。
+     *
+     * <p>所有动画字段均为 {@code List<String>}：单个字符串配置会被转成单元素列表；
+     * 数组配置表示"随机选一个"。列表中出现 {@code "none"}（不区分大小写）表示
+     * 该次不播动画（用原版动作/默认姿态）。
+     */
     public static final class ModelConfig {
-        public String defaultAnimation;
+        /** 默认动画（待机），支持随机列表。 */
+        public List<String> defaultAnimations;
         /** 模型 3D 贴图，形如 capi:textures/geo_models/example.png；null=用默认路径。 */
         public String modelTexture;
         /** 物品栏 2D 图标贴图，形如 capi:textures/item/example.png；null=不替换。 */
@@ -241,8 +282,16 @@ public final class AnimationIndex {
         public float fpX = 0.56f;   // 右（模拟原版第一人称手持偏移）
         public float fpY = -0.52f; // 下
         public float fpZ = 0.72f;  // 前
-        public String switchIn;
-        public String switchOut;
+        /** 切入动画（物品入手时），支持随机列表；null/none=不播切入，直接默认姿态。 */
+        public List<String> switchIn;
+        /** 切出动画（物品离手时），支持随机列表；null/none=不播切出。 */
+        public List<String> switchOut;
+        /** 开始疾跑瞬间播放（非循环），支持随机列表；null=不播。 */
+        public List<String> sprintStart;
+        /** 疾跑持续期间循环播放，支持随机列表（进入疾跑时随机选定一次）；null=不播。 */
+        public List<String> sprinting;
+        /** 结束疾跑瞬间播放（非循环），结束后回默认，支持随机列表；null=不播。 */
+        public List<String> sprintEnd;
         public final Map<String, List<KeyAction>> keyActions = new HashMap<>();
 
         /**

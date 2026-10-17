@@ -43,6 +43,12 @@ public final class AnimationState {
     private ActiveAnimation fpTransition;
     /** fp 过渡方向：true=基岩→原版（结束后交原版），false=原版→基岩（结束后回默认）。 */
     private boolean fpTransitionToVanilla;
+    /** 上一帧是否疾跑（用于检测状态变化）。 */
+    private boolean prevSprinting;
+    /** 当前疾跑阶段选定的循环动画名（进入疾跑时随机选定一次，sprinting 阶段用）。 */
+    private String activeSprintLoop;
+    /** 疾跑阶段：0=无, 1=start(非循环), 2=sprinting(循环), 3=end(非循环)。 */
+    private int sprintPhase;
 
     public static AnimationState get() {
         return INSTANCE;
@@ -55,8 +61,11 @@ public final class AnimationState {
             // 物品被切出：如果有切出动画，播放
             if (prevModel != null && !prevModel.equals(modelKey)) {
                 ModelConfig cfg = AnimationIndex.get().get(prevModel);
-                if (cfg != null && cfg.switchOut != null) {
-                    switchOutPending = build(prevModel, cfg.switchOut, false);
+                if (cfg != null) {
+                    String outAnim = AnimationIndex.pickRandom(cfg.switchOut);
+                    if (outAnim != null) {
+                        switchOutPending = build(prevModel, outAnim, false);
+                    }
                 }
             }
             if (switchOutPending == null) {
@@ -69,8 +78,11 @@ public final class AnimationState {
         // 模型切换：先切出旧模型，再切入新模型
         if (prevModel != null && !prevModel.equals(modelKey)) {
             ModelConfig oldCfg = AnimationIndex.get().get(prevModel);
-            if (oldCfg != null && oldCfg.switchOut != null) {
-                switchOutPending = build(prevModel, oldCfg.switchOut, false);
+            if (oldCfg != null) {
+                String outAnim = AnimationIndex.pickRandom(oldCfg.switchOut);
+                if (outAnim != null) {
+                    switchOutPending = build(prevModel, outAnim, false);
+                }
             }
             resetClicks();
         }
@@ -80,17 +92,20 @@ public final class AnimationState {
         }
     }
 
-    /** 播放默认动画（切入动画优先）。 */
+    /** 播放默认动画（切入动画优先，支持随机）。 */
     private void startDefault(String modelKey) {
         ModelConfig cfg = AnimationIndex.get().get(modelKey);
-        if (cfg != null && cfg.switchIn != null && switchOutPending == null) {
-            ActiveAnimation in = build(modelKey, cfg.switchIn, true);
-            if (in != null) {
-                current = in;
-                return;
+        if (cfg != null && switchOutPending == null) {
+            String inAnim = AnimationIndex.pickRandom(cfg.switchIn);
+            if (inAnim != null) {
+                ActiveAnimation in = build(modelKey, inAnim, false);
+                if (in != null) {
+                    current = in;
+                    return;
+                }
             }
         }
-        String animName = cfg != null ? cfg.defaultAnimation : null;
+        String animName = cfg != null ? AnimationIndex.pickRandom(cfg.defaultAnimations) : null;
         if (animName == null) {
             // 回退到 idle
             Map<String, BedrockAnimation> set = BedrockModelManager.get().animationsForModel(modelKey);
@@ -145,7 +160,7 @@ public final class AnimationState {
             if (!vanillaFpMode) {
                 // 基岩 → 原版：先播退场关键帧（基岩仍渲染），结束后再交原版
                 String outAnim = target.toVanillaAnimation != null
-                        ? target.toVanillaAnimation : cfg.switchOut;
+                        ? target.toVanillaAnimation : AnimationIndex.pickRandom(cfg.switchOut);
                 ActiveAnimation t = outAnim != null ? build(handModel, outAnim, false) : null;
                 if (t != null) {
                     fpTransition = t;
@@ -158,7 +173,7 @@ public final class AnimationState {
                 // 原版 → 基岩：立即恢复基岩渲染，再播进场关键帧
                 vanillaFpMode = false;
                 String inAnim = target.toBedrockAnimation != null
-                        ? target.toBedrockAnimation : cfg.switchIn;
+                        ? target.toBedrockAnimation : AnimationIndex.pickRandom(cfg.switchIn);
                 ActiveAnimation t = inAnim != null ? build(handModel, inAnim, false) : null;
                 if (t != null) {
                     fpTransition = t;
@@ -248,6 +263,76 @@ public final class AnimationState {
         return elapsed >= a.animation.length;
     }
 
+    /**
+     * 当前是否正在播放强制动画（force_play=true 且尚未结束）。
+     * 用于外部拦截攻击/使用物品等服务端动作。
+     */
+    public boolean isForcePlaying() {
+        ActiveAnimation a = current;
+        if (a == null) return false;
+        if (!AnimationIndex.get().isForcePlay(a.modelKey, a.animName)) return false;
+        if (a.loop) return true;
+        float elapsed = (System.currentTimeMillis() - a.startMs) / 1000f;
+        return elapsed < a.animation.length;
+    }
+
+    /**
+     * 疾跑状态机：每帧调用，检测玩家疾跑状态变化并触发对应动画。
+     *
+     * <p>三阶段：
+     * <ul>
+     *   <li>start（非循环）：非疾跑→疾跑瞬间播放，结束后进入 sprinting；</li>
+     *   <li>sprinting（循环）：疾跑持续期间播放，进入时随机选定一次；</li>
+     *   <li>end（非循环）：疾跑→非疾跑瞬间播放，结束后回默认。</li>
+     * </ul>
+     * 任一阶段配置为 null/"none"/空数组时跳过该阶段。
+     */
+    public void updateSprint(boolean isSprinting) {
+        if (handModel == null) {
+            prevSprinting = false;
+            sprintPhase = 0;
+            activeSprintLoop = null;
+            return;
+        }
+        ModelConfig cfg = AnimationIndex.get().get(handModel);
+        if (cfg == null) return;
+
+        // fp 过渡进行中或原版模拟模式：不处理疾跑动画
+        if (fpTransition != null || vanillaFpMode) {
+            prevSprinting = isSprinting;
+            return;
+        }
+
+        if (isSprinting && !prevSprinting) {
+            // 进入疾跑
+            String startAnim = AnimationIndex.pickRandom(cfg.sprintStart);
+            if (startAnim != null && canInterruptCurrent()) {
+                current = build(handModel, startAnim, false);
+                sprintPhase = 1;
+            } else {
+                // 无 start 动画：直接进 sprinting
+                String loopAnim = AnimationIndex.pickRandom(cfg.sprinting);
+                if (loopAnim != null && canInterruptCurrent()) {
+                    activeSprintLoop = loopAnim;
+                    current = build(handModel, loopAnim, true);
+                    sprintPhase = 2;
+                }
+            }
+        } else if (!isSprinting && prevSprinting) {
+            // 退出疾跑
+            sprintPhase = 0;
+            activeSprintLoop = null;
+            String endAnim = AnimationIndex.pickRandom(cfg.sprintEnd);
+            if (endAnim != null && canInterruptCurrent()) {
+                current = build(handModel, endAnim, false);
+                sprintPhase = 3;
+            } else {
+                startDefault(handModel);
+            }
+        }
+        prevSprinting = isSprinting;
+    }
+
     /** 服务端 /pba 强制播放。 */
     public void handlePacket(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
@@ -309,8 +394,26 @@ public final class AnimationState {
                             // 原版→基岩进场结束：回基岩默认
                             startDefault(handModel);
                         }
+                    } else if (sprintPhase == 1) {
+                        // 疾跑 start 结束：进入 sprinting 循环
+                        sprintPhase = 2;
+                        ModelConfig cfg = AnimationIndex.get().get(handModel);
+                        String loopAnim = cfg != null ? AnimationIndex.pickRandom(cfg.sprinting) : null;
+                        if (loopAnim != null) {
+                            activeSprintLoop = loopAnim;
+                            current = build(handModel, loopAnim, true);
+                        } else {
+                            startDefault(handModel);
+                        }
+                    } else if (sprintPhase == 3) {
+                        // 疾跑 end 结束：回默认
+                        sprintPhase = 0;
+                        activeSprintLoop = null;
+                        if (handModel != null) startDefault(handModel);
+                        else current = null;
                     } else {
                         // 普通按键动画结束后回到默认
+                        sprintPhase = 0;
                         if (handModel != null) {
                             startDefault(handModel);
                         } else {
@@ -386,6 +489,9 @@ public final class AnimationState {
         fpBlockAnimations = true;
         fpTransition = null;
         fpTransitionToVanilla = false;
+        prevSprinting = false;
+        sprintPhase = 0;
+        activeSprintLoop = null;
     }
 
     public static final class BoneTransform {

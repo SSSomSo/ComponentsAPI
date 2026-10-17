@@ -50,6 +50,8 @@ public final class KeyBindHandler {
         }
         String model = BedrockItemRenderer.modelOf(mc.player.getMainHandItem());
         AnimationState.get().setHandModel(model);
+        // 疾跑状态机：每帧检测疾跑状态变化
+        AnimationState.get().updateSprint(mc.player.isSprinting());
 
         if (model == null) {
             prev.clear();
