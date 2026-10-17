@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -291,6 +292,7 @@ public final class BedrockRenderer {
             consumer.addVertex(pose, c[0], c[1], c[2]);
             consumer.setColor(1f, 1f, 1f, 1f);
             consumer.setUv(cuv[0], cuv[1]);
+            consumer.setOverlay(OverlayTexture.NO_OVERLAY);
             consumer.setLight(light);
             consumer.setNormal(pose, nx, ny, nz);
         }
