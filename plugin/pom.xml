@@ -6,7 +6,7 @@
 
     <groupId>com.componentsapi</groupId>
     <artifactId>ComponentsAPI</artifactId>
-    <version>1.9.0</version>
+    <version>1.10.0</version>
     <packaging>jar</packaging>
 
     <name>ComponentsAPI</name>
@@ -28,7 +28,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>26.2.build.129-stable</version>
+            <version>26.2.build.134-stable</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

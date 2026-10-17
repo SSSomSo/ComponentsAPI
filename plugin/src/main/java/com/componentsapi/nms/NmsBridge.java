@@ -4,7 +4,6 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,24 +12,47 @@ import java.util.Map;
  * NMS 全反射桥接：
  * 1) 方块实体 NBT 中 capi 复合标签的读写（因此支持 /data merge block）；
  * 2) 直接写 StarLight 的方块光照 nibble（Paper 26.2 使用 StarLight/Moonrise）。
+ *
+ * 序列化体系兼容（saveMode）：
+ *   新版（Paper 26.2 build 134 及以后，Mojang 改用 ValueInput/ValueOutput 体系）：
+ *     保存 BlockEntity.saveWithFullMetadata(HolderLookup.Provider) -> CompoundTag
+ *     加载 BlockEntity.loadWithComponents(ValueInput)，其中 ValueInput 由
+ *       TagValueInput.create(ProblemReporter.DISCARDING, provider, compound) 构造
+ *   旧版（build 12x 等）：
+ *     保存 saveWithFullMetadata(CompoundTag) / saveWithFullMetadata() / save(CompoundTag)
+ *     加载 loadWithComponents(CompoundTag, Provider) / load(CompoundTag, Provider)
  */
 public final class NmsBridge {
+
+    /** 新版序列化：saveWithFullMetadata(Provider) + loadWithComponents(ValueInput)。 */
+    private static final int MODE_NEW_PROVIDER = 0;
+    /** 旧版序列化：saveXxx(CompoundTag)。 */
+    private static final int MODE_TAG_PARAM = 1;
+    /** 旧版序列化：saveXxx() 无参。 */
+    private static final int MODE_NOARG = 2;
 
     private final Method craftWorldGetHandle;
     private final Constructor<?> blockPosCtor;
     private final Constructor<?> compoundCtor;
     private final Method getBlockEntity;
     private final Method saveFull;
-    private final boolean saveFullHasParam;
-    private final Method loadWithComponents;
-    private final Method load;
+    private final int saveMode;
     private final Method registryAccess;
     private final Method tagContains;
     private final Method tagGetCompound;
     private final Method tagPut;
     private final Method tagKeySet;
     private final Method tagGet;
+    // 任意 SNBT 值解析（build134 起只有 parseCompoundFully，旧版为 parseTag）
+    private final Method parseCompoundFully;
     private final Method parseTag;
+    // 新版加载
+    private final Method tviCreate;
+    private final Object discardingReporter;
+    private final Method newLoadWithComponents;
+    // 旧版加载
+    private final Method oldLoadWithComponents;
+    private final Method oldLoad;
     private final Method getChunk;
     private final Method getBlockNibbles;
     private final Method getSkyNibbles;
@@ -62,24 +84,59 @@ public final class NmsBridge {
             tagGet = compound.getMethod("get", String.class);
 
             Class<?> blockEntity = Class.forName("net.minecraft.world.level.block.entity.BlockEntity");
-            // 保存方法在不同版本/分支签名不同：
-            //   Paper 部分版本: saveWithFullMetadata(CompoundTag)
-            //   Leaf/较新原版: saveWithFullMetadata() 无参返回 CompoundTag
-            //   旧版: save(CompoundTag)
-            // 按优先级尝试，取第一个存在的。
-            Method sf = findMethod(blockEntity, "saveWithFullMetadata", compound);
-            if (sf == null) {
-                sf = findMethod(blockEntity, "saveWithFullMetadata");
+
+            // registry provider 类型：优先 HolderLookup$Provider（saveWithFullMetadata 的形参声明），
+            // RegistryAccess 是其子接口；极旧版本回退 RegistryAccess。
+            Class<?> providerClass;
+            try {
+                providerClass = Class.forName("net.minecraft.core.HolderLookup$Provider");
+            } catch (ClassNotFoundException e) {
+                providerClass = Class.forName("net.minecraft.core.RegistryAccess");
             }
-            if (sf == null) {
-                sf = findMethod(blockEntity, "save", compound);
+
+            // 1) 新版（build134+）：saveWithFullMetadata(HolderLookup.Provider)
+            Method newSave = findMethod(blockEntity, "saveWithFullMetadata", providerClass);
+            if (newSave != null) {
+                saveMode = MODE_NEW_PROVIDER;
+                saveFull = newSave;
+                oldLoadWithComponents = null;
+                oldLoad = null;
+
+                Class<?> valueInputClass = Class.forName("net.minecraft.world.level.storage.ValueInput");
+                newLoadWithComponents = blockEntity.getMethod("loadWithComponents", valueInputClass);
+                Class<?> tagValueInputClass = Class.forName("net.minecraft.world.level.storage.TagValueInput");
+                Class<?> problemReporterClass = Class.forName("net.minecraft.util.ProblemReporter");
+                tviCreate = tagValueInputClass.getMethod("create",
+                        problemReporterClass, providerClass, compound);
+                discardingReporter = problemReporterClass.getField("DISCARDING").get(null);
+            } else {
+                // 2) 旧版：按优先级尝试，取第一个存在的保存方法。
+                Method sf = findMethod(blockEntity, "saveWithFullMetadata", compound);
+                if (sf != null) {
+                    saveMode = MODE_TAG_PARAM;
+                } else {
+                    sf = findMethod(blockEntity, "saveWithFullMetadata");
+                    if (sf != null) {
+                        saveMode = MODE_NOARG;
+                    } else {
+                        sf = findMethod(blockEntity, "save", compound);
+                        if (sf == null) {
+                            throw new NoSuchMethodException(
+                                    "BlockEntity 中找不到 saveWithFullMetadata(Provider)/saveWithFullMetadata(CompoundTag)/saveWithFullMetadata()/save(CompoundTag)");
+                        }
+                        saveMode = MODE_TAG_PARAM;
+                    }
+                }
+                saveFull = sf;
+                tviCreate = null;
+                discardingReporter = null;
+                newLoadWithComponents = null;
+                oldLoadWithComponents = findMethod(blockEntity, "loadWithComponents", compound, providerClass);
+                oldLoad = findMethod(blockEntity, "load", compound, providerClass);
+                if (oldLoadWithComponents == null && oldLoad == null) {
+                    throw new NoSuchMethodException("BlockEntity 中找不到 loadWithComponents/load");
+                }
             }
-            if (sf == null) {
-                throw new NoSuchMethodException(
-                        "BlockEntity 中找不到 saveWithFullMetadata()/saveWithFullMetadata(CompoundTag)/save(CompoundTag)");
-            }
-            saveFull = sf;
-            saveFullHasParam = sf.getParameterCount() > 0;
 
             Class<?> level = Class.forName("net.minecraft.world.level.Level");
             getBlockEntity = level.getMethod("getBlockEntity", blockPos);
@@ -87,26 +144,13 @@ public final class NmsBridge {
             getLightEngine = level.getMethod("getLightEngine");
 
             Class<?> serverLevel = Class.forName("net.minecraft.server.level.ServerLevel");
-            Class<?> registryAccessClass;
-            Method ra;
-            try {
-                registryAccessClass = Class.forName("net.minecraft.core.RegistryAccess");
-                ra = serverLevel.getMethod("registryAccess");
-            } catch (ClassNotFoundException e) {
-                registryAccessClass = Class.forName("net.minecraft.core.HolderLookup$Provider");
-                ra = serverLevel.getMethod("registryAccess");
-            }
-            registryAccess = ra;
-            loadWithComponents = findMethod(blockEntity, "loadWithComponents", compound, registryAccessClass);
-            load = findMethod(blockEntity, "load", compound, registryAccessClass);
+            registryAccess = serverLevel.getMethod("registryAccess");
 
-            // TagParser：任意 SNBT 值 → Tag
-            Class<?> tagParser = Class.forName("net.minecraft.nbt.TagParser");
-            Method pt = findMethod(tagParser, "parseTag", String.class);
-            if (pt == null) {
-                pt = tagParser.getMethod("parseCompoundFully", String.class);
-            }
-            parseTag = pt;
+            // TagParser：build134 起只有 parseCompoundFully（仅解析 compound）；
+            // 任意值通过 {v:<value>} 包装后解析。旧版可能存在 parseTag（任意 Tag）。
+            parseCompoundFully = findMethod(
+                    Class.forName("net.minecraft.nbt.TagParser"), "parseCompoundFully", String.class);
+            parseTag = findMethod(Class.forName("net.minecraft.nbt.TagParser"), "parseTag", String.class);
 
             // StarLight
             Class<?> starlightChunk = Class.forName(
@@ -155,9 +199,7 @@ public final class NmsBridge {
             if (blockEntity == null) {
                 return result;
             }
-            Object fullTag = saveFullHasParam
-                    ? saveFull.invoke(blockEntity, compoundCtor.newInstance())
-                    : saveFull.invoke(blockEntity);
+            Object fullTag = saveToTag(blockEntity, serverLevel);
             if (!(Boolean) tagContains.invoke(fullTag, "capi")) {
                 return result;
             }
@@ -181,23 +223,16 @@ public final class NmsBridge {
             if (blockEntity == null) {
                 throw new IllegalStateException("该方块不是方块实体，无法存储组件");
             }
-            Object fullTag = saveFullHasParam
-                    ? saveFull.invoke(blockEntity, compoundCtor.newInstance())
-                    : saveFull.invoke(blockEntity);
+            Object fullTag = saveToTag(blockEntity, serverLevel);
 
             Object capi = compoundCtor.newInstance();
             for (Map.Entry<String, String> entry : components.entrySet()) {
-                Object valueTag = parseTag.invoke(null, entry.getValue());
+                Object valueTag = parseAnyTag(entry.getValue());
                 tagPut.invoke(capi, entry.getKey(), valueTag);
             }
             tagPut.invoke(fullTag, "capi", capi);
 
-            Object provider = registryAccess.invoke(serverLevel);
-            if (loadWithComponents != null) {
-                loadWithComponents.invoke(blockEntity, fullTag, provider);
-            } else {
-                load.invoke(blockEntity, fullTag, provider);
-            }
+            loadFromTag(blockEntity, serverLevel, fullTag);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("写入方块组件失败: " + e.getMessage(), e);
         }
@@ -214,7 +249,48 @@ public final class NmsBridge {
         }
     }
 
-    private Object parseSnbt(String snbt) throws ReflectiveOperationException {
+    /** 将方块实体完整序列化为 CompoundTag（自动适配新旧体系）。 */
+    private Object saveToTag(Object blockEntity, Object serverLevel) throws ReflectiveOperationException {
+        switch (saveMode) {
+            case MODE_NEW_PROVIDER: {
+                Object provider = registryAccess.invoke(serverLevel);
+                return saveFull.invoke(blockEntity, provider);
+            }
+            case MODE_TAG_PARAM:
+                return saveFull.invoke(blockEntity, compoundCtor.newInstance());
+            case MODE_NOARG:
+            default:
+                return saveFull.invoke(blockEntity);
+        }
+    }
+
+    /** 从 CompoundTag 回写方块实体（自动适配新旧体系）。 */
+    private void loadFromTag(Object blockEntity, Object serverLevel, Object fullTag)
+            throws ReflectiveOperationException {
+        if (saveMode == MODE_NEW_PROVIDER) {
+            Object provider = registryAccess.invoke(serverLevel);
+            Object valueInput = tviCreate.invoke(null, discardingReporter, provider, fullTag);
+            newLoadWithComponents.invoke(blockEntity, valueInput);
+        } else {
+            Object provider = registryAccess.invoke(serverLevel);
+            if (oldLoadWithComponents != null) {
+                oldLoadWithComponents.invoke(blockEntity, fullTag, provider);
+            } else {
+                oldLoad.invoke(blockEntity, fullTag, provider);
+            }
+        }
+    }
+
+    /**
+     * 解析任意 SNBT 值为 Tag。
+     * build134 起 TagParser 只有 parseCompoundFully（仅 compound），故把任意值包成 {v:VALUE}
+     * 解析后取 "v"；旧版若存在 parseTag 则直接解析任意值。
+     */
+    private Object parseAnyTag(String snbt) throws ReflectiveOperationException {
+        if (parseCompoundFully != null) {
+            Object wrapped = parseCompoundFully.invoke(null, "{v:" + snbt + "}");
+            return tagGet.invoke(wrapped, "v");
+        }
         return parseTag.invoke(null, snbt);
     }
 
