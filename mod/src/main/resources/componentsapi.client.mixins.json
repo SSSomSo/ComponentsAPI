@@ -12,7 +12,8 @@
     "ItemModelResolverMixin",
     "ItemStackRenderStateAccessor",
     "PackRepositoryAccessor",
-    "MinecraftMixin"
+    "MinecraftMixin",
+    "ItemFeatureRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

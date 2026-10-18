@@ -50,24 +50,76 @@ public class ItemModelResolverMixin {
     }
 
     private static void capi$stripGlint(ItemStackRenderState state, ItemStack stack) {
+        // 自定义附魔颜色：读取 custom_data.sscustomitems.enchantment_glint_color
+        // 写入 LayerRenderState.tintLayers 的第 0 位（用负数值标记，避免与原版 tint 冲突）
+        Integer customGlint = capi$readCustomGlintColor(stack);
+
         String model = BedrockItemRenderer.modelOf(stack);
-        if (model == null) {
-            return;
-        }
-        // index 显式开启附魔光效则保留
-        if (BedrockItemRenderer.glintAllowed(model)) {
-            return;
-        }
         ItemStackRenderStateAccessor acc = (ItemStackRenderStateAccessor) state;
         int count = acc.capi$getActiveLayerCount();
         ItemStackRenderState.LayerRenderState[] layers = acc.capi$getLayers();
         if (layers == null) {
             return;
         }
+
+        boolean stripGlint = model != null && !BedrockItemRenderer.glintAllowed(model);
+
         for (int i = 0; i < count && i < layers.length; i++) {
-            if (layers[i] != null) {
+            if (layers[i] == null) {
+                continue;
+            }
+            if (stripGlint) {
                 layers[i].setFoilType(FoilType.NONE);
             }
+            // 写入自定义附魔颜色标记（负数：-color-1，读取时还原）
+            if (customGlint != null) {
+                it.unimi.dsi.fastutil.ints.IntList tints = layers[i].tintLayers();
+                if (tints != null) {
+                    // 用 index 0 存储标记值；若已有 tint 则先暂存
+                    tints.add(0, -customGlint - 1);
+                }
+            }
+        }
+    }
+
+    /**
+     * 读取物品 custom_data.sscustomitems.enchantment_glint_color（#RRGGBB 或 0xRRGGBB）。
+     * 返回打包的 ARGB int（alpha=FF），无配置返回 null。
+     */
+    private static Integer capi$readCustomGlintColor(ItemStack stack) {
+        try {
+            net.minecraft.world.item.component.CustomData cd = stack.get(
+                    net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+            if (cd == null) {
+                return null;
+            }
+            net.minecraft.nbt.CompoundTag tag = cd.copyTag();
+            if (!tag.contains("sscustomitems")) {
+                return null;
+            }
+            net.minecraft.nbt.Tag ssciTag = tag.get("sscustomitems");
+            if (!(ssciTag instanceof net.minecraft.nbt.CompoundTag ssci)) {
+                return null;
+            }
+            if (!ssci.contains("enchantment_glint_color")) {
+                return null;
+            }
+            String colorStr = ssci.getString("enchantment_glint_color").orElse(null);
+            if (colorStr == null || colorStr.isBlank()) {
+                return null;
+            }
+            colorStr = colorStr.trim();
+            int rgb;
+            if (colorStr.startsWith("#")) {
+                rgb = Integer.parseInt(colorStr.substring(1), 16);
+            } else if (colorStr.startsWith("0x") || colorStr.startsWith("0X")) {
+                rgb = Integer.parseInt(colorStr.substring(2), 16);
+            } else {
+                rgb = Integer.parseInt(colorStr, 16);
+            }
+            return 0xFF000000 | (rgb & 0xFFFFFF);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

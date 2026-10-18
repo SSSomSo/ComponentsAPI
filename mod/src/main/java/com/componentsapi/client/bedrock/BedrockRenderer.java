@@ -286,15 +286,22 @@ public final class BedrockRenderer {
             default:  perm = new int[]{0, 1, 2, 3}; break;
         }
         float[][] corners = {c0, c1, c2, c3};
+        org.joml.Matrix4f poseMat = pose.pose();
+        org.joml.Matrix3f normalMat = pose.normal();
+        org.joml.Vector3f tp = new org.joml.Vector3f();
+        org.joml.Vector3f tn = new org.joml.Vector3f();
+        normalMat.transform(nx, ny, nz, tn);
         for (int i = 0; i < 4; i++) {
             float[] c = corners[i];
             float[] cuv = cornerUV[perm[i]];
-            consumer.addVertex(pose, c[0], c[1], c[2]);
-            consumer.setColor(1f, 1f, 1f, 1f);
-            consumer.setUv(cuv[0], cuv[1]);
-            consumer.setOverlay(OverlayTexture.NO_OVERLAY);
-            consumer.setLight(light);
-            consumer.setNormal(pose, nx, ny, nz);
+            poseMat.transformPosition(c[0], c[1], c[2], tp);
+            // 一次性写入所有顶点元素：位置, 颜色(ARGB), UV, overlay, light, 法线
+            consumer.addVertex(tp.x, tp.y, tp.z,
+                    0xFFFFFFFF,
+                    cuv[0], cuv[1],
+                    OverlayTexture.NO_OVERLAY,
+                    light,
+                    tn.x, tn.y, tn.z);
         }
     }
 
