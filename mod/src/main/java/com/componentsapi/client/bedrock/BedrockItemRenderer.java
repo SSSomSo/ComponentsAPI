@@ -200,7 +200,7 @@ public final class BedrockItemRenderer {
             matrices.mulPose(Axis.ZP.rotationDegrees(cube.rotZ));
             matrices.translate(-cube.pivotX * UNIT, -cube.pivotY * UNIT, -cube.pivotZ * UNIT);
             collector.submitCustomGeometry(matrices,
-                    RenderTypes.entityCutout(texture),
+                    RenderTypes.itemCutout(texture),
                     (pose, consumer) -> BedrockRenderer.emitCubePublic(model, cube, pose, consumer, light));
             matrices.popPose();
         }
