@@ -4,6 +4,8 @@ import com.componentsapi.client.bedrock.BedrockItemRenderer;
 import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState.FoilType;
+import net.minecraft.client.renderer.item.ItemStackRenderState.LayerRenderState;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.entity.LivingEntity;
@@ -15,68 +17,91 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 附魔光效（glint）总开关。
+ * 附魔光效（glint）总开关 + 自定义附魔颜色传递。
  *
  * 基岩物品在第一/第三人称手持、GUI 已被自定义渲染替换，本身不产生 glint；
- * 但掉落物、展示框、物品展示框等仍走原版物品模型路径，会显示附魔光效。
+ * 但掉落物、展示框等仍走原版物品模型路径，会显示附魔光效。
  *
  * 在 ItemModelResolver 填充 ItemStackRenderState 之后（三条解析路径都覆盖）：
- * 若物品是基岩物品且 index.enchantment_glint 未开启（默认 false），把所有层
- * foilType 置为 NONE，彻底关闭附魔光效以节省资源。
+ * 1. 若物品是基岩物品且 index.enchantment_glint 未开启（默认 false），把所有层
+ *    foilType 置为 NONE，彻底关闭附魔光效以节省资源。
+ * 2. 若物品配置了 custom_data.sscustomitems.enchantment_glint_color，将颜色存入
+ *    静态 Map（key = LayerRenderState.quads 的 identityHashCode），供
+ *    ItemFeatureRendererMixin 在 prepareFoilSubmit 中读取。
+ *
+ * 注意：**不要**将颜色写入 tintLayers！prepareMainSubmit 会用
+ * getLayerColorSafe(tints, materialInfo) 读取 tintLayers[tintLayer] 作为物品
+ * 模型颜色，负数标记会被当成 tint 颜色导致物品模型偏色（1.12.0 踩过的坑）。
  */
 @Mixin(ItemModelResolver.class)
 public class ItemModelResolverMixin {
+
+    /**
+     * 自定义附魔颜色传递表。
+     * key = System.identityHashCode(LayerRenderState.quads())
+     * value = 打包的 ARGB int（alpha=FF）
+     * 由 ItemFeatureRendererMixin.prepareFoilSubmit 读取并使用。
+     */
+    private static final Map<Integer, Integer> CUSTOM_GLINT_COLORS = new HashMap<>();
+
+    /** 供 ItemFeatureRendererMixin 查询自定义附魔颜色。 */
+    public static Integer getCustomGlintColor(int quadsIdentityHash) {
+        return CUSTOM_GLINT_COLORS.get(quadsIdentityHash);
+    }
 
     @Inject(method = "updateForLiving", at = @At("TAIL"), require = 0)
     private void capi$stripGlintLiving(ItemStackRenderState state, ItemStack stack,
                                       ItemDisplayContext context, LivingEntity entity,
                                       CallbackInfo ci) {
-        capi$stripGlint(state, stack);
+        capi$process(state, stack);
     }
 
     @Inject(method = "updateForNonLiving", at = @At("TAIL"), require = 0)
     private void capi$stripGlintNonLiving(ItemStackRenderState state, ItemStack stack,
                                          ItemDisplayContext context, Entity entity,
                                          CallbackInfo ci) {
-        capi$stripGlint(state, stack);
+        capi$process(state, stack);
     }
 
     @Inject(method = "updateForTopItem", at = @At("TAIL"), require = 0)
     private void capi$stripGlintTop(ItemStackRenderState state, ItemStack stack,
                                    ItemDisplayContext context, Level level,
                                    ItemOwner owner, int light, CallbackInfo ci) {
-        capi$stripGlint(state, stack);
+        capi$process(state, stack);
     }
 
-    private static void capi$stripGlint(ItemStackRenderState state, ItemStack stack) {
-        // 自定义附魔颜色：读取 custom_data.sscustomitems.enchantment_glint_color
-        // 写入 LayerRenderState.tintLayers 的第 0 位（用负数值标记，避免与原版 tint 冲突）
-        Integer customGlint = capi$readCustomGlintColor(stack);
-
+    private static void capi$process(ItemStackRenderState state, ItemStack stack) {
         String model = BedrockItemRenderer.modelOf(stack);
         ItemStackRenderStateAccessor acc = (ItemStackRenderStateAccessor) state;
         int count = acc.capi$getActiveLayerCount();
-        ItemStackRenderState.LayerRenderState[] layers = acc.capi$getLayers();
+        LayerRenderState[] layers = acc.capi$getLayers();
         if (layers == null) {
             return;
         }
 
+        // 读取自定义附魔颜色（所有层共用同一个颜色）
+        Integer customGlint = capi$readCustomGlintColor(stack);
+
         boolean stripGlint = model != null && !BedrockItemRenderer.glintAllowed(model);
 
         for (int i = 0; i < count && i < layers.length; i++) {
-            if (layers[i] == null) {
+            LayerRenderState layer = layers[i];
+            if (layer == null) {
                 continue;
             }
             if (stripGlint) {
-                layers[i].setFoilType(FoilType.NONE);
+                layer.setFoilType(FoilType.NONE);
             }
-            // 写入自定义附魔颜色标记（负数：-color-1，读取时还原）
+            // 用 quads 列表的 identityHashCode 作为 key 传递自定义颜色
             if (customGlint != null) {
-                it.unimi.dsi.fastutil.ints.IntList tints = layers[i].tintLayers();
-                if (tints != null) {
-                    // 用 index 0 存储标记值；若已有 tint 则先暂存
-                    tints.add(0, -customGlint - 1);
+                List<BakedQuad> quads = ((LayerRenderStateAccessor) layer).capi$getQuads();
+                if (quads != null) {
+                    CUSTOM_GLINT_COLORS.put(System.identityHashCode(quads), customGlint);
                 }
             }
         }

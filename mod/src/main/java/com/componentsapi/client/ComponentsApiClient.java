@@ -43,6 +43,9 @@ public final class ComponentsApiClient implements ClientModInitializer {
 
         BlockModelRegistry.register();
 
+        // 客户端侧组件扫描器（单人世界支持：不依赖插件端同步，直接从世界读取 capi 标签）
+        ClientComponentScanner.register();
+
         // 按键绑定（lc/rc/mc 及 index 中声明的任意键盘键）
         KeyBindHandler.register();
 
