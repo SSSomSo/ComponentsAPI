@@ -1,5 +1,6 @@
 package com.componentsapi.client.mixin;
 
+import com.componentsapi.client.GlintColorRegistry;
 import com.componentsapi.client.bedrock.BedrockItemRenderer;
 import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
@@ -17,9 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 附魔光效（glint）总开关 + 自定义附魔颜色传递。
@@ -40,19 +39,6 @@ import java.util.Map;
  */
 @Mixin(ItemModelResolver.class)
 public class ItemModelResolverMixin {
-
-    /**
-     * 自定义附魔颜色传递表。
-     * key = System.identityHashCode(LayerRenderState.quads())
-     * value = 打包的 ARGB int（alpha=FF）
-     * 由 ItemFeatureRendererMixin.prepareFoilSubmit 读取并使用。
-     */
-    private static final Map<Integer, Integer> CUSTOM_GLINT_COLORS = new HashMap<>();
-
-    /** 供 ItemFeatureRendererMixin 查询自定义附魔颜色。 */
-    public static Integer getCustomGlintColor(int quadsIdentityHash) {
-        return CUSTOM_GLINT_COLORS.get(quadsIdentityHash);
-    }
 
     @Inject(method = "updateForLiving", at = @At("TAIL"), require = 0)
     private void capi$stripGlintLiving(ItemStackRenderState state, ItemStack stack,
@@ -101,7 +87,7 @@ public class ItemModelResolverMixin {
             if (customGlint != null) {
                 List<BakedQuad> quads = ((LayerRenderStateAccessor) layer).capi$getQuads();
                 if (quads != null) {
-                    CUSTOM_GLINT_COLORS.put(System.identityHashCode(quads), customGlint);
+                    GlintColorRegistry.put(System.identityHashCode(quads), customGlint);
                 }
             }
         }

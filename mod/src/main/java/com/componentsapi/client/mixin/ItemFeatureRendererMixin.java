@@ -1,5 +1,6 @@
 package com.componentsapi.client.mixin;
 
+import com.componentsapi.client.GlintColorRegistry;
 import net.minecraft.client.renderer.feature.ItemFeatureRenderer;
 import net.minecraft.client.renderer.feature.ItemFeatureRenderer.Submit;
 import org.spongepowered.asm.mixin.Mixin;
@@ -62,9 +63,9 @@ public abstract class ItemFeatureRendererMixin {
         }
         int color = 0xFFFFFFFF; // 默认白色不透明
 
-        // 从静态 Map 读取自定义附魔颜色（key = quads 列表的 identityHashCode）
+        // 从 GlintColorRegistry 读取自定义附魔颜色（key = quads 列表的 identityHashCode）
         if (submit.quads() != null) {
-            Integer custom = ItemModelResolverMixin.getCustomGlintColor(
+            Integer custom = GlintColorRegistry.get(
                     System.identityHashCode(submit.quads()));
             if (custom != null) {
                 color = custom;
