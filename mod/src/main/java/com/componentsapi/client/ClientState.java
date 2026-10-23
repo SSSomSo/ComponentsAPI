@@ -86,28 +86,6 @@ public final class ClientState {
         return entities.get(entityId);
     }
 
-    /**
-     * 客户端侧扫描器用：直接更新单个方块的渲染信息。
-     * 与插件端同步报文的 handle() 不同，这个方法只更新单个方块，不清空全量数据。
-     */
-    public void updateBlock(BlockPos pos, String model, int light, boolean eatEnvironmentLight) {
-        long packed = packPos(pos.getX(), pos.getY(), pos.getZ());
-        blocks.put(packed, new BlockRender(model, light, eatEnvironmentLight));
-        occupiedChunks.add(packChunk(pos.getX() >> 4, pos.getZ() >> 4));
-    }
-
-    /** 客户端侧扫描器用：直接更新单个实体的模型。 */
-    public void updateEntity(int entityId, String model) {
-        entities.put(entityId, model);
-    }
-
-    /** 客户端侧扫描器用：移除单个方块的渲染信息（方块被移除时调用）。 */
-    public void removeBlock(BlockPos pos) {
-        long packed = packPos(pos.getX(), pos.getY(), pos.getZ());
-        blocks.remove(packed);
-        // occupiedChunks 不主动移除（其他方块可能还在）
-    }
-
     /** 与插件 SyncManager#packPos 相同口径。 */
     public static long packPos(int x, int y, int z) {
         return ((long) (x & 0x3FFFFFF) << 38)
