@@ -47,7 +47,7 @@ public abstract class FirstPersonRendererMixin {
                 }
             }
             // 用基岩渲染器渲染，取消原版
-            BedrockItemRenderer.renderFirstPerson(modelKey, matrices, collector, light);
+            BedrockItemRenderer.renderFirstPerson(modelKey, matrices, collector, light, hand);
             ci.cancel();
         }
     }

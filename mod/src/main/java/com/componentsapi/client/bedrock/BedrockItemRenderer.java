@@ -2,13 +2,21 @@ package com.componentsapi.client.bedrock;
 
 import com.componentsapi.client.bedrock.AnimationIndex.ModelConfig;
 import com.componentsapi.client.bedrock.BedrockAnimation.BoneAnimation;
+import com.componentsapi.client.bedrock.BedrockModel.Bone;
+import com.componentsapi.client.bedrock.BedrockModel.Cube;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import org.joml.Vector3f;
@@ -16,13 +24,20 @@ import org.joml.Vector3f;
 import java.util.Map;
 
 /**
- * 物品基岩模型渲染：
- * 物品在 custom_data 中携带 {"capi_bedrock_model": "namespace:name"}，
+ * 物品基岩模型渲染。
+ *
+ * <p>物品在 custom_data 中携带 {@code {"capi_bedrock_model":"namespace:name"}}，
  * 客户端在手持渲染时检测该标识，用基岩渲染器渲染整个模型（含骨骼动画、手臂定位组）。
  *
- * 第三人称：通过 Mixin 重定向 ItemInHandLayer.submitArmWithItem 内的 ItemStackRenderState.submit，
- * 此时 PoseStack 已包含 translateToHand（手部定位）+ 攻击挥动(attackTime) + 持物姿势(armPose)，
- * 因此模型会自然跟随手臂摆动；模型再用 righthand_pos/lefthand_pos 定位组把"手"锚定到坐标系原点。
+ * <p><b>手臂定位组（1.14.0 重写）</b>：geo 中的 {@code lefthand_pos} /
+ * {@code righthand_pos} 定位组，其参考 cube 仅用于 Blockbench 内预览，游戏中
+ * <b>不绘制</b>。第一人称下，在该定位组的骨骼坐标系里直接渲染玩家的<b>真实手臂</b>
+ * （{@link AvatarRenderer#renderRightHand} / {@code renderLeftHand}），因此玩家的
+ * 手臂会完全跟随定位组的骨骼（含动画）移动，而不会改变手部纹理。
+ *
+ * <p>第三人称：在 {@code ItemInHandLayer} 已定位到手部（含挥动/持物姿势）的
+ * PoseStack 中渲染模型，并用 {@link BedrockAnchor} 计算定位组锚点，把模型的"手"
+ * 对齐到玩家手部；第三人称不替换手臂（手臂由原版渲染）。
  */
 public final class BedrockItemRenderer {
 
@@ -91,15 +106,24 @@ public final class BedrockItemRenderer {
      * @param matrices  第一人称 PoseStack
      * @param collector 提交器
      * @param light     光照
+     * @param hand      本次渲染的是主手还是副手（决定渲染哪只手臂定位组）
      */
     public static void renderFirstPerson(String modelKey, PoseStack matrices,
-                                         SubmitNodeCollector collector, int light) {
+                                         SubmitNodeCollector collector, int light,
+                                         InteractionHand hand) {
         BedrockModel model = BedrockModelManager.get().model(modelKey);
         if (model == null) {
             return;
         }
         AnimationState state = AnimationState.get();
         ModelConfig cfg = state.getConfig();
+
+        // 把 InteractionHand 换算成左右（兼容左撇子）。
+        HumanoidArm mainArm = Minecraft.getInstance().player != null
+                ? Minecraft.getInstance().player.getMainArm() : HumanoidArm.RIGHT;
+        boolean rightHand = (hand == InteractionHand.MAIN_HAND)
+                ? (mainArm == HumanoidArm.RIGHT)
+                : (mainArm == HumanoidArm.LEFT);
 
         Identifier texture = textureFor(modelKey);
 
@@ -113,11 +137,11 @@ public final class BedrockItemRenderer {
         }
         matrices.scale(FIRST_PERSON_SCALE, FIRST_PERSON_SCALE, FIRST_PERSON_SCALE);
 
-        for (BedrockModel.Bone bone : model.bones) {
+        for (Bone bone : model.bones) {
             if (bone.parent == null || model.bones.stream()
                     .noneMatch(b -> b.name.equals(bone.parent))) {
                 traverseAnimated(model, bone, matrices, texture, collector, light,
-                        modelKey, true, 0f);
+                        modelKey, true, 0f, true, rightHand);
             }
         }
         matrices.popPose();
@@ -146,70 +170,126 @@ public final class BedrockItemRenderer {
         boolean useGlobal = state.getHandModel() != null && state.getHandModel().equals(modelKey);
 
         matrices.pushPose();
-        // 原版手持坐标系已对物品做 X-90 平躺；补偿 +90 让基岩模型保持 y-up 原生朝向（手持定位组对齐）
-        matrices.mulPose(Axis.XP.rotationDegrees(90f));
-        // 用对应手的定位组锚点，把模型的"手"放到坐标系原点（原点=玩家手部，已随手臂挥动）
+        // 用对应手的定位组锚点，把模型的"手"放到坐标系原点（原点=玩家手部，已随手臂挥动）。
+        // 模型与手持坐标系同为 Java Y 向下体系，无需整体翻转。
         Vector3f anchor = BedrockAnchor.handAnchor(model, useGlobal ? state : null, rightHand);
         if (anchor != null) {
             matrices.translate(-anchor.x, -anchor.y, -anchor.z);
         }
         matrices.scale(THIRD_PERSON_SCALE, THIRD_PERSON_SCALE, THIRD_PERSON_SCALE);
 
-        for (BedrockModel.Bone bone : model.bones) {
+        for (Bone bone : model.bones) {
             if (bone.parent == null || model.bones.stream()
                     .noneMatch(b -> b.name.equals(bone.parent))) {
                 traverseAnimated(model, bone, matrices, texture, collector, light,
-                        modelKey, useGlobal, ageInTicks);
+                        modelKey, useGlobal, ageInTicks, false, rightHand);
             }
         }
         matrices.popPose();
     }
 
-    /** 遍历骨骼并应用动画后渲染（第一/第三人称共用）。 */
-    private static void traverseAnimated(BedrockModel model, BedrockModel.Bone bone,
+    /**
+     * 遍历骨骼并应用动画后渲染（第一/第三人称共用）。
+     *
+     * @param firstPerson true=第一人称（定位组渲染玩家手臂）；false=第三人称（定位组跳过）
+     * @param rightHand   当前持有的手是否为右手（第一人称用于只渲染对应手的手臂定位组）
+     */
+    private static void traverseAnimated(BedrockModel model, Bone bone,
                                          PoseStack matrices, Identifier texture,
                                          SubmitNodeCollector collector, int light,
-                                         String modelKey, boolean useGlobal, float ageInTicks) {
+                                         String modelKey, boolean useGlobal, float ageInTicks,
+                                         boolean firstPerson, boolean rightHand) {
         // 忽略该骨骼组及其全部子层级（不 pushPose、不渲染）
         if (AnimationIndex.get().isIgnoredBone(modelKey, bone.name)) {
             return;
         }
         matrices.pushPose();
-        float px = bone.pivotX, py = bone.pivotY, pz = bone.pivotZ;
-        float rx = bone.rotX, ry = bone.rotY, rz = bone.rotZ;
+        float aPx = 0f, aPy = 0f, aPz = 0f;
+        float aRx = 0f, aRy = 0f, aRz = 0f;
         float sx = 1f, sy = 1f, sz = 1f;
         AnimationState.BoneTransform t = sampleBone(modelKey, bone.name, useGlobal, ageInTicks);
         if (t != null) {
-            px += t.posX; py += t.posY; pz += t.posZ;
-            rx += t.rotX; ry += t.rotY; rz += t.rotZ;
+            aPx = t.posX; aPy = t.posY; aPz = t.posZ;
+            aRx = t.rotX; aRy = t.rotY; aRz = t.rotZ;
             sx = t.scaleX; sy = t.scaleY; sz = t.scaleZ;
         }
+        // 标准骨骼变换：translate(局部 pos) → Z → Y → X → scale（无 pivot 补偿）。
+        BedrockRenderer.applyBoneTransform(matrices, bone,
+                aPx, aPy, aPz, aRx, aRy, aRz, sx, sy, sz);
 
-        matrices.translate(px * UNIT, py * UNIT, pz * UNIT);
-        matrices.mulPose(Axis.XP.rotationDegrees(rx));
-        matrices.mulPose(Axis.YP.rotationDegrees(ry));
-        matrices.mulPose(Axis.ZP.rotationDegrees(rz));
-        matrices.scale(sx, sy, sz);
-        matrices.translate(-bone.pivotX * UNIT, -bone.pivotY * UNIT, -bone.pivotZ * UNIT);
+        // 手臂定位组：参考 cube 不绘制。
+        if (bone.handPos) {
+            if (firstPerson) {
+                // 只渲染"当前持有的手"对应的定位组：右手物品→右手，左手物品→左手。
+                // 避免主手物品把两只手臂都渲染出来。
+                boolean isRightArm = bone.handPosArm != 2;
+                if (isRightArm == rightHand) {
+                    renderPlayerArm(matrices, collector, light, isRightArm);
+                }
+            }
+            // 第三人称直接跳过；定位组通常是叶子骨骼，不继续递归。
+            matrices.popPose();
+            return;
+        }
 
-        for (BedrockModel.Cube cube : bone.cubes) {
+        for (Cube cube : bone.cubes) {
             matrices.pushPose();
-            matrices.translate(cube.pivotX * UNIT, cube.pivotY * UNIT, cube.pivotZ * UNIT);
-            matrices.mulPose(Axis.XP.rotationDegrees(cube.rotX));
-            matrices.mulPose(Axis.YP.rotationDegrees(cube.rotY));
-            matrices.mulPose(Axis.ZP.rotationDegrees(cube.rotZ));
-            matrices.translate(-cube.pivotX * UNIT, -cube.pivotY * UNIT, -cube.pivotZ * UNIT);
+            if (cube.hasRot) {
+                matrices.translate(cube.offX, cube.offY, cube.offZ);
+                matrices.mulPose(Axis.ZP.rotationDegrees(cube.rotZ));
+                matrices.mulPose(Axis.YP.rotationDegrees(cube.rotY));
+                matrices.mulPose(Axis.XP.rotationDegrees(cube.rotX));
+            }
             collector.submitCustomGeometry(matrices,
                     RenderTypes.itemCutout(texture),
                     (pose, consumer) -> BedrockRenderer.emitCubePublic(model, cube, pose, consumer, light));
             matrices.popPose();
         }
 
-        for (BedrockModel.Bone child : model.bones) {
+        for (Bone child : model.bones) {
             if (bone.name.equals(child.parent)) {
                 traverseAnimated(model, child, matrices, texture, collector, light,
-                        modelKey, useGlobal, ageInTicks);
+                        modelKey, useGlobal, ageInTicks, firstPerson, rightHand);
             }
+        }
+        matrices.popPose();
+    }
+
+    /**
+     * 在当前定位组坐标系渲染玩家真实手臂。
+     *
+     * <p>定位组的骨骼变换已经把矩阵带到 Blockbench 中的手臂根（肩膀）位置；
+     * 基岩模型手臂方向与原版第一人称手臂相差 180° 绕 Z，故先做 ZP(180)。
+     * 手臂模型使用玩家自身皮肤，不改变手部纹理。
+     */
+    private static void renderPlayerArm(PoseStack matrices, SubmitNodeCollector collector,
+                                        int light, boolean right) {
+        Minecraft mc = Minecraft.getInstance();
+        AbstractClientPlayer player = mc.player;
+        if (player == null) {
+            return;
+        }
+        AvatarRenderer<AbstractClientPlayer> renderer =
+                mc.getEntityRenderDispatcher().getPlayerRenderer(player);
+        if (renderer == null) {
+            return;
+        }
+        Identifier skinTexture = player.getSkin().body().texturePath();
+        matrices.pushPose();
+        matrices.mulPose(Axis.ZP.rotationDegrees(180f));
+        // showSleeve 暂用 false（皮肤外层袖子）；基础手臂内层已完整。
+        if (right) {
+            renderer.renderRightHand(matrices, collector, light, skinTexture, false);
+        } else {
+            renderer.renderLeftHand(matrices, collector, light, skinTexture, false);
+        }
+        // 中和 26.2 AvatarRenderer#renderHand 写入的 leftArm.zRot=-0.1 / rightArm.zRot=+0.1
+        // 轻微倾斜（原版让手臂有点外撇），让手臂笔直对齐定位组；两条手臂都清（原版每次调用
+        // 会污染两条）。renderRightHand 是向 collector 提交延迟任务，flush 前清 zRot 即可生效。
+        PlayerModel playerModel = renderer.getModel();
+        if (playerModel != null) {
+            playerModel.leftArm.zRot = 0f;
+            playerModel.rightArm.zRot = 0f;
         }
         matrices.popPose();
     }

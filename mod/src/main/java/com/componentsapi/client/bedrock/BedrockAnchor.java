@@ -1,42 +1,43 @@
 package com.componentsapi.client.bedrock;
 
+import com.componentsapi.client.bedrock.BedrockModel.Bone;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
- * 基岩模型手部定位组锚点计算（前向运动学 FK）。
+ * 基岩模型手部定位组锚点计算（前向运动学 FK），1.14.0 改为 Java Y 向下局部体系。
  *
- * 基岩 geometry 中所有 bone 的 pivot 都是相对模型原点的全局坐标（不是相对父 bone），
- * 因此子 bone 相对父 bone 的局部偏移 = child.pivot - parent.pivot。
+ * <p>{@link BedrockModel} 已把每个 bone 的位置烘焙为相对父骨骼的局部坐标
+ * （{@code posX/posY/posZ}，单位方块）。本类沿 root→定位组 链按与渲染完全相同的
+ * 顺序（translate → rotateZ → rotateY → rotateX → scale）累积世界矩阵。
  *
- * 模型空间中某 bone 的世界矩阵：
- *   World[root] = T(root.pivot) * R(root) * S
- *   World[bone] = World[parent] * T(bone.pivot - parent.pivot) * R(bone) * S
- *
- * 定位组（righthand_pos / lefthand_pos）的 pivot 即手部锚点，
- * 取 World[target] 平移分量；动画的 position/rotation/scale 一并参与，
- * 从而播放动画时锚点（玩家手部）会跟随定位组移动。
+ * <p>定位组 {@code righthand_pos} / {@code lefthand_pos} 的 pivot 是<b>手臂根
+ * （肩膀）</b>，定位块尺寸 x4 y12 z4，沿 Y 向下延伸 12 像素到手腕。第三人称物品
+ * 要对齐到玩家的手（握把），所以锚点取该骨骼空间下 {@code (0, 12, 0)}（手腕）经
+ * 世界矩阵变换后的位置。
  */
 public final class BedrockAnchor {
 
     private static final float UNIT = 1f / 16f;
+    /** 手臂定位块长度（12 像素），从肩膀到手腕。 */
+    private static final float ARM_LENGTH = 12f * UNIT;
 
     /** 定位组 bone 名。 */
     public static final String RIGHT = "righthand_pos";
     public static final String LEFT = "lefthand_pos";
 
     /**
-     * 计算指定手的定位组在模型空间（单位：方块）的锚点位置。
+     * 计算指定手的定位组手腕在模型空间（单位：方块）的锚点。
      *
      * @param model     基岩模型
      * @param state     动画状态（可 null，null 时只算静态骨架）
      * @param rightHand true=右手 righthand_pos，false=左手 lefthand_pos
-     * @return 锚点（x,y,z，单位方块）；找不到定位组时返回 null（调用方退化为模型原点）
+     * @return 手腕锚点（x,y,z，单位方块）；找不到定位组时返回 null（调用方退化为模型原点）
      */
     public static Vector3f handAnchor(BedrockModel model, AnimationState state, boolean rightHand) {
         String targetName = rightHand ? RIGHT : LEFT;
-        BedrockModel.Bone target = null;
-        for (BedrockModel.Bone b : model.bones) {
+        Bone target = null;
+        for (Bone b : model.bones) {
             if (b.name.equalsIgnoreCase(targetName)) {
                 target = b;
                 break;
@@ -47,56 +48,46 @@ public final class BedrockAnchor {
         }
         Matrix4f world = new Matrix4f();
         accumulate(model, target, state, world);
-        // 该 bone 原点（pivot）在模型空间的位置 = 世界矩阵的平移分量
-        // （局部原点经 S、R 仍为原点，仅累积各级 T）
-        Vector3f anchor = world.getTranslation(new Vector3f());
-        return anchor;
+        // 手腕在骨骼空间为 (0, ARM_LENGTH, 0)（Y 向下），经世界矩阵变换（含旋转）。
+        return world.transformPosition(0f, ARM_LENGTH, 0f, new Vector3f());
     }
 
-    /** 沿 root→bone 链累积世界矩阵（递归到父级）。 */
-    private static void accumulate(BedrockModel model, BedrockModel.Bone bone,
+    /** 沿 root→bone 链累积世界矩阵（与渲染的 applyBoneTransform 完全一致）。 */
+    private static void accumulate(BedrockModel model, Bone bone,
                                    AnimationState state, Matrix4f world) {
-        BedrockModel.Bone parent = findBone(model, bone.parent);
+        Bone parent = findBone(model, bone.parent);
         if (parent != null) {
             accumulate(model, parent, state, world);
         }
-        // 基岩 pivot 为全局坐标 → 相对父 bone 的局部偏移
-        float px = bone.pivotX;
-        float py = bone.pivotY;
-        float pz = bone.pivotZ;
-        if (parent != null) {
-            px -= parent.pivotX;
-            py -= parent.pivotY;
-            pz -= parent.pivotZ;
-        }
-        float rx = bone.rotX, ry = bone.rotY, rz = bone.rotZ;
+
+        float aPx = 0f, aPy = 0f, aPz = 0f;
+        float aRx = 0f, aRy = 0f, aRz = 0f;
         float sx = 1f, sy = 1f, sz = 1f;
         if (state != null && state.isPlaying()) {
             AnimationState.BoneTransform t = state.sample(bone.name);
             if (t != null) {
-                px += t.posX;
-                py += t.posY;
-                pz += t.posZ;
-                rx += t.rotX;
-                ry += t.rotY;
-                rz += t.rotZ;
-                sx = t.scaleX;
-                sy = t.scaleY;
-                sz = t.scaleZ;
+                aPx = t.posX; aPy = t.posY; aPz = t.posZ;
+                aRx = t.rotX; aRy = t.rotY; aRz = t.rotZ;
+                sx = t.scaleX; sy = t.scaleY; sz = t.scaleZ;
             }
         }
-        world.translate(px * UNIT, py * UNIT, pz * UNIT);
-        world.rotateZ((float) Math.toRadians(rz));
-        world.rotateY((float) Math.toRadians(ry));
-        world.rotateX((float) Math.toRadians(rx));
+
+        // 局部位置（已为单位方块）+ 动画平移（Y 向上 → Y 向下，取反）。
+        world.translate(bone.posX + aPx * UNIT,
+                bone.posY - aPy * UNIT,
+                bone.posZ + aPz * UNIT);
+        // 旋转顺序 Z → Y → X。
+        world.rotateZ((float) Math.toRadians(bone.rotZ + aRz));
+        world.rotateY((float) Math.toRadians(bone.rotY + aRy));
+        world.rotateX((float) Math.toRadians(bone.rotX + aRx));
         world.scale(sx, sy, sz);
     }
 
-    private static BedrockModel.Bone findBone(BedrockModel model, String name) {
+    private static Bone findBone(BedrockModel model, String name) {
         if (name == null) {
             return null;
         }
-        for (BedrockModel.Bone b : model.bones) {
+        for (Bone b : model.bones) {
             if (b.name.equals(name)) {
                 return b;
             }

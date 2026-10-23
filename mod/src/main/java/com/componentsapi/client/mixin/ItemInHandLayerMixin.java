@@ -10,44 +10,46 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * 第三人称手持基岩物品渲染。
  *
- * 关键：不能在 submitArmWithItem 的 HEAD 注入（那时还没做 translateToHand，
- * PoseStack 停在实体原点，模型不会跟随手臂）。
+ * <p>原版 {@code submitArmWithItem} 的流程：
+ * <pre>
+ *   translateToHand(arm)                 // 坐标系定位到手腕（含手臂挥动）
+ *   mulPose(XP.rotationDegrees(-90))     // 物品朝向：让物品平躺
+ *   mulPose(YP.rotationDegrees(180))
+ *   translate(...)                       // 物品微调
+ *   ItemStackRenderState.submit(...)
+ * </pre>
  *
- * 这里重定向方法末尾的 ItemStackRenderState.submit —— 此时 PoseStack 已包含
- * translateToHand（手部定位）+ X-90/Y180 物品朝向 + 攻击挥动(attackTime) +
- * 持物姿势(ArmPose.animateUseItem)，基岩模型在该坐标系渲染即可自然跟随手臂摆动。
- *
- * 玩家层 PlayerItemInHandLayer 常规手持走 super.submitArmWithItem，也会进入本类；
- * 仅"举到眼前"（望远镜等）走独立路径，由 PlayerItemInHandLayerMixin 兜底。
+ * <p>基岩模型本身是 Java Y 向下的实体体系（含手臂定位组），必须在
+ * <b>{@code translateToHand} 之后、物品朝向旋转之前</b>渲染，否则会被
+ * XP(-90)/YP(180) 翻转，朝向错误且无法用逆旋转干净抵消（中间夹着平移）。
+ * 因此这里在 translateToHand 调用之后注入，渲染模型并取消原版后续物品渲染。
  */
 @Mixin(ItemInHandLayer.class)
-public class ItemInHandLayerMixin {
+public abstract class ItemInHandLayerMixin {
 
-    @Redirect(
+    @Inject(
             method = "submitArmWithItem",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"),
+                    target = "Lnet/minecraft/client/model/ArmedModel;translateToHand(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lnet/minecraft/world/entity/HumanoidArm;Lcom/mojang/blaze3d/vertex/PoseStack;)V",
+                    shift = At.Shift.AFTER),
+            cancellable = true,
             require = 0)
-    private void capi$redirectHeldItemSubmit(
-            // 被重定向调用：ItemStackRenderState.submit(PoseStack, SubmitNodeCollector, int, int, int)
-            ItemStackRenderState rs, PoseStack ps, SubmitNodeCollector collector,
-            int light, int overlay, int outline,
-            // 外层 submitArmWithItem 的全部形参
-            ArmedEntityRenderState state, ItemStackRenderState rsOuter, ItemStack stack,
-            HumanoidArm arm, PoseStack matrices, SubmitNodeCollector collectorOuter,
-            int lightOuter) {
+    private void capi$renderAfterTranslateToHand(
+            ArmedEntityRenderState state, ItemStackRenderState rs, ItemStack stack,
+            HumanoidArm arm, PoseStack matrices, SubmitNodeCollector collector,
+            int light, CallbackInfo ci) {
         String model = BedrockItemRenderer.modelOf(stack);
         if (model != null) {
-            // 替换原版物品渲染为基岩模型（PoseStack 已在手部位姿）
-            BedrockItemRenderer.renderThirdPerson(model, ps, collector, light,
+            // 此时 PoseStack 仅含 translateToHand（手部坐标系，含挥动），未做物品朝向旋转。
+            BedrockItemRenderer.renderThirdPerson(model, matrices, collector, light,
                     arm == HumanoidArm.RIGHT, state.ageInTicks);
-        } else {
-            rs.submit(ps, collector, light, overlay, outline);
+            ci.cancel();
         }
     }
 }
